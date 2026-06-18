@@ -1,0 +1,16 @@
+venv/
+__pycache__/
+.ipynb_checkpoints/
+results_segformer/
+*.png
+*.jpg
+*.jpeg
+*.bmp
+mon_modele_final/
+videos/
+mon_modele_final/
+temp_files/
+videos/
+__pycache__/
+.DS_Store
+CamVid/
