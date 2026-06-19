@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import evaluate
 
-# Initialisation globale de la métrique Hugging Face
 metric = evaluate.load("mean_iou")
 
 class MulticlassDiceLoss(nn.Module):
@@ -34,10 +33,49 @@ class MulticlassDiceLoss(nn.Module):
         return 1.0 - dice_score.mean()
 
 
+class MulticlassFocalLoss(nn.Module):
+    def __init__(self, num_classes, gamma=2.0, ignore_index=255):
+        super().__init__()
+        self.num_classes = num_classes
+        self.gamma = gamma
+        self.ignore_index = ignore_index
+
+    def forward(self, logits, targets):
+        # Calcul de la Cross Entropy par pixel sans réduction immédiate
+        ce_loss = F.cross_entropy(logits, targets, ignore_index=self.ignore_index, reduction='none')
+        
+        # Calcul de pt (la probabilité de la bonne classe pour chaque pixel)
+        pt = torch.exp(-ce_loss)
+        
+        # Formule de la Focal Loss : (1 - pt)^gamma * ce_loss
+        focal_loss = ((1 - pt) ** self.gamma) * ce_loss
+        
+        # On ne fait la moyenne que sur les pixels valides
+        mask_valid = (targets != self.ignore_index)
+        if mask_valid.sum() == 0:
+            return torch.tensor(0.0, device=logits.device)
+            
+        return focal_loss[mask_valid].mean()
+
+
+class ComboDiceFocalLoss(nn.Module):
+    """
+    Combine la Dice Loss et la Focal Loss de manière équilibrée.
+    """
+    def __init__(self, num_classes, gamma=2.0, ignore_index=255):
+        super().__init__()
+        self.dice = MulticlassDiceLoss(num_classes, ignore_index)
+        self.focal = MulticlassFocalLoss(num_classes, gamma, ignore_index)
+
+    def forward(self, logits, targets):
+        dice_loss = self.dice(logits, targets)
+        focal_loss = self.focal(logits, targets)
+        
+        # Combinaison ajustable (ici 50% de chaque)
+        return 0.5 * dice_loss + 0.5 * focal_loss
+
+
 def compute_metrics(eval_pred, num_classes=32):
-    """
-    Calcule le Mean IoU en redimensionnant les prédictions à la taille des masques cibles.
-    """
     with torch.no_grad():
         logits, labels = eval_pred
         logits_tensor = torch.from_numpy(logits)
