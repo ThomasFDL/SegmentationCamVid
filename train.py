@@ -95,7 +95,7 @@ training_args = TrainingArguments(
     fp16=torch.cuda.is_available(), 
     lr_scheduler_type="cosine", 
     warmup_ratio=0.1,                    
-    report_to="wandb",
+    report_to="tensorboard",
     run_name="SegFormer_CamVid_ComboLoss",                    
     
     # SÉCURITÉ ANTI-SATURATION MEMOIRE (KAGGLE)
