@@ -9,7 +9,7 @@ from PIL import Image, ImageTk
 from transformers import SegformerImageProcessor, SegformerForSemanticSegmentation
 
 # ==========================================
-# CONFIGURATION LOCALE (PLUS BESOIN D'API)
+# CONFIGURATION LOCALE 
 # ==========================================
 CSV_FILE_PATH = "./CamVid/class_dict.csv"
 MODEL_PATH = "./mon_modele_final" 
