@@ -95,7 +95,8 @@ training_args = TrainingArguments(
     fp16=torch.cuda.is_available(), 
     lr_scheduler_type="cosine", 
     warmup_ratio=0.1,                    
-    report_to="none",                    
+    report_to="wandb",
+    run_name="SegFormer_CamVid_ComboLoss",                    
     
     # SÉCURITÉ ANTI-SATURATION MEMOIRE (KAGGLE)
     load_best_model_at_end=True,         
@@ -117,41 +118,48 @@ trainer = SegmentationTrainer(
 # 6. ENTRAÎNEMENT ET COURBES
 # ==========================================
 if __name__ == "__main__":
-    print("Démarrage de l'entraînement...")
+    print("Démarrage de l'entraînement supérieur sur GPU avec Combo Loss...")
     trainer.train()
     
     print("Extraction et sauvegarde du meilleur modèle...")
     trainer.save_model("./mon_modele_final")
     
-    print("Génération du graphique complet (Loss + Mean IoU)...")
+    print("Génération du graphique complet à 3 courbes séparées...")
     history = trainer.state.log_history
     train_loss = [log["loss"] for log in history if "loss" in log]
     train_steps = [log["step"] for log in history if "loss" in log]
     val_loss = [log["eval_loss"] for log in history if "eval_loss" in log]
     val_iou = [log["eval_mean_iou"] for log in history if "eval_mean_iou" in log]
     
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10))
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 15))
     
-    # --- GRAPHIQUE 1 : LES COURBES DE LOSS ---
     ax1.plot(train_steps, train_loss, label="Train Loss", color="blue", alpha=0.6)
-    if val_loss and train_steps:
-        steps_per_epoch = train_steps[-1] / training_args.num_train_epochs
-        val_steps = [i * steps_per_epoch for i in range(1, len(val_loss) + 1)]
-        ax1.plot(val_steps, val_loss, label="Validation Loss", color="orange", marker="o")
     ax1.set_xlabel("Steps (Étapes de calcul)")
-    ax1.set_ylabel("Loss (Erreur)")
-    ax1.set_title("Évolution de la Perte (Loss)")
+    ax1.set_ylabel("Loss")
+    ax1.set_title("Évolution de la Perte d'Entraînement (Train Loss)")
     ax1.legend()
     ax1.grid(True)
     
-    # --- GRAPHIQUE 2 : LA COURBE MEAN IOU ---
-    if val_iou and train_steps:
-        ax2.plot(val_steps, val_iou, label="Validation Mean IoU", color="green", marker="s")
-        ax2.set_xlabel("Steps (Étapes de calcul)")
-        ax2.set_ylabel("Mean IoU")
-        ax2.set_title("Évolution du Mean IoU")
-        ax2.legend()
-        ax2.grid(True)
+    val_steps = []
+    if train_steps and val_loss:
+        steps_per_epoch = train_steps[-1] / training_args.num_train_epochs
+        val_steps = [i * steps_per_epoch for i in range(1, len(val_loss) + 1)]
+
+    if val_loss and val_steps:
+        ax2.plot(val_steps, val_loss, label="Validation Loss", color="orange", marker="o")
+    ax2.set_xlabel("Steps (Étapes de calcul)")
+    ax2.set_ylabel("Loss")
+    ax2.set_title("Évolution de la Perte de Validation (Validation Loss)")
+    ax2.legend()
+    ax2.grid(True)
+    
+    if val_iou and val_steps:
+        ax3.plot(val_steps, val_iou, label="Validation Mean IoU", color="green", marker="s")
+    ax3.set_xlabel("Steps (Étapes de calcul)")
+    ax3.set_ylabel("Mean IoU")
+    ax3.set_title("Évolution du Mean IoU")
+    ax3.legend()
+    ax3.grid(True)
         
     plt.tight_layout()
     plt.savefig("./training_metrics.png")
