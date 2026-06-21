@@ -19,20 +19,23 @@ class CamVidDataset(Dataset):
 
         # Définition du pipeline de Data Augmentation (appliqué uniquement si is_train=True)
         self.transform = A.Compose([
-            A.HorizontalFlip(p=0.5),                  # 50% de chance de retourner l'image horizontalement
-            A.RandomBrightnessContrast(p=0.3),         # Ajuste la luminosité pour simuler la météo
+            A.HorizontalFlip(p=0.5),                  
+            A.RandomBrightnessContrast(p=0.3),         # Ajuste la luminosité
             A.ShiftScaleRotate(
                 shift_limit=0.05, 
                 scale_limit=0.05, 
                 rotate_limit=10, 
                 p=0.4, 
-                border_mode=0,
-                cval=(0, 0, 0),       # <-- 'value' devient 'cval'
-                mask_cval=255         # <-- 'mask_value' devient 'mask_cval'
+                border_mode=0,                         # Remplit les pixels hors de l'image
+                cval=(0, 0, 0),       
+                mask_cval=255         
             ), 
         ])
 
     def _load_color_mapping(self, csv_path):
+        """
+        Charge le mapping des couleurs RGB vers les indices de classes depuis un fichier CSV.
+        """
         mapping = {}
         with open(csv_path, mode='r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
@@ -40,7 +43,11 @@ class CamVidDataset(Dataset):
                 mapping[(int(row['r']), int(row['g']), int(row['b']))] = idx
         return mapping
 
+
     def _rgb_to_class_indices(self, mask_rgb_array):
+        """
+        Convertit un masque RGB en indices de classes.
+        """
         h, w, _ = mask_rgb_array.shape
         # 🛡️ FIX 1 : On initialise avec 255 (ignore_index) au lieu de 0 
         # pour éviter de polluer la première classe avec les pixels inconnus ou les bordures.
@@ -59,7 +66,7 @@ class CamVidDataset(Dataset):
         filename, extension = os.path.splitext(image_name)
         mask_name = f"{filename}_L{extension}"
         
-        # Charger l'image et le masque sous forme de tableaux NumPy (Requis par Albumentations)
+        # Charger l'image et le masque sous forme de tableaux NumPy
         image = np.array(Image.open(os.path.join(self.images_dir, image_name)).convert("RGB"))
         mask_rgb = np.array(Image.open(os.path.join(self.masks_dir, mask_name)).convert("RGB"))
         
@@ -73,12 +80,12 @@ class CamVidDataset(Dataset):
             mask_indices = augmented['mask']
 
         # 🛡️ FIX 2 : On force explicitement Hugging Face à conserver la taille originale du masque
-        # sans appliquer de réduction automatique des labels (reduce_labels=False)
+        # sans appliquer de réduction automatique des labels (do_reduce_labels=False)
         inputs = self.processor(
             images=image, 
             segmentation_maps=mask_indices, 
             return_tensors="pt",
-            do_reduce_labels=False 
+            do_reduce_labels=False #Permet de conserver les labels originaux sans réduction automatique
         )
         
         # Suppression de la dimension de batch générée par le processeur (1, C, H, W) -> (C, H, W)
