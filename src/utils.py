@@ -8,6 +8,9 @@ from torchmetrics.classification import MulticlassJaccardIndex
 metric = evaluate.load("mean_iou")
 
 class MulticlassDiceLoss(nn.Module):
+    """
+    Implementation de la Dice Loss pour la segmentation multi-classes.
+    """
     def __init__(self, num_classes, ignore_index=255):
         super().__init__()
         self.num_classes = num_classes
@@ -35,6 +38,9 @@ class MulticlassDiceLoss(nn.Module):
 
 
 class MulticlassFocalLoss(nn.Module):
+    """
+    Implementation de la Focal Loss pour la segmentation multi-classes.
+    """
     def __init__(self, num_classes, gamma=2.0, ignore_index=255):
         super().__init__()
         self.num_classes = num_classes
@@ -72,11 +78,13 @@ class ComboDiceFocalLoss(nn.Module):
         dice_loss = self.dice(logits, targets)
         focal_loss = self.focal(logits, targets)
         
-        # Combinaison ajustable (ici 50% de chaque)
         return 0.5 * dice_loss + 0.5 * focal_loss
 
 
 def compute_metrics(eval_pred, num_classes=32):
+    """
+    Fonction pour calculer le mIoU à partir des prédictions et des labels.
+    """
     with torch.no_grad():
         logits, labels = eval_pred
         logits_tensor = torch.from_numpy(logits)
