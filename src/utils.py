@@ -58,7 +58,7 @@ class MulticlassFocalLoss(nn.Module):
         focal_loss = ((1 - pt) ** self.gamma) * ce_loss
         
         # On ne fait la moyenne que sur les pixels valides
-        mask_valid = (targets != self.ignore_index)
+        mask_valid = (targets != self.ignore_index) & (targets != 30)
         if mask_valid.sum() == 0:
             return torch.tensor(0.0, device=logits.device)
             
