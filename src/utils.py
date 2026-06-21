@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import evaluate
+from torchmetrics.classification import MulticlassJaccardIndex
 
 metric = evaluate.load("mean_iou")
 
@@ -94,3 +95,62 @@ def compute_metrics(eval_pred, num_classes=32):
             reduce_labels=False
         )
         return {"mean_iou": metrics["mean_iou"]}
+    
+
+
+
+def evaluate_model(model, test_loader, num_classes=32, device=None):
+
+    if device is None:
+        device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+        
+    # Configuration du modèle
+    model.to(device)
+    model.eval()
+    
+    # Initialisation de la métrique IoU (Jaccard Index) macro pour le mIoU
+    miou_metric = MulticlassJaccardIndex(num_classes=num_classes, average='macro', ignore_index=255).to(device)
+    
+    print(f"Démarrage de l'évaluation")
+    
+    with torch.no_grad():
+        for batch in test_loader:
+            # 1. Extraction et sécurisation des données selon la structure du batch
+            if isinstance(batch, dict):
+                # Si le dataset renvoie un dictionnaire (Hugging Face / SegFormer standard)
+                images = batch.get("pixel_values")
+                masks = batch.get("labels")
+            elif isinstance(batch, (list, tuple)):
+                # Si le dataset renvoie un tuple (images, masks, éventuellement paths)
+                images = batch[0]
+                masks = batch[1]
+            else:
+                # Cas imprévu
+                raise TypeError(f"Format de batch non supporté : {type(batch)}")
+
+            # 2. Envoi sur le périphérique (GPU/CPU)
+            images = images.to(device)
+            masks = masks.to(device).long()
+            # 3. Prédiction adaptée à SegFormer
+            outputs = model(images)
+            # Récupération des logits (gère les sorties brutes ou les objets complexes)
+            logits = outputs.logits if hasattr(outputs, 'logits') else outputs
+            # REDIMENSIONNEMENT CRITIQUE : Aligner la taille des logits sur celle des masques
+            # Passe de [4, 32, 128, 128] à [4, 32, 512, 512]
+
+            upsampled_logits = F.interpolate(
+                logits, 
+                size=masks.shape[1:],  # Utilise la hauteur et largeur du masque (ex: 512, 512)
+                mode='bilinear', 
+                align_corners=False
+            )
+            # Extraction des prédictions (classe dominante par pixel)
+            preds = torch.argmax(upsampled_logits, dim=1)
+            # 4. Accumulation du score mIoU
+            miou_metric.update(preds, masks)
+            
+    # Calcul final du mIoU
+    final_miou = miou_metric.compute().item()
+    print(f"Score mIoU Final : {final_miou * 100:.2f}%")
+
+    return final_miou
