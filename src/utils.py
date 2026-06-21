@@ -83,26 +83,29 @@ class ComboDiceFocalLoss(nn.Module):
 
 def compute_metrics(eval_pred, num_classes=32):
     """
-    Fonction pour calculer le mIoU à partir des prédictions et des labels.
+    Calcule le mIoU pendant l'entraînement.
     """
     with torch.no_grad():
         logits, labels = eval_pred
         logits_tensor = torch.from_numpy(logits)
+        
+        # Redimensionnement géométrique des logits à la taille réelle des masques
         outputs = torch.nn.functional.interpolate(
             logits_tensor, size=labels.shape[-2:], mode="bilinear", align_corners=False
         )
-        preds = outputs.argmax(dim=1).numpy()
-        preds_clean = np.ascontiguousarray(preds)
-        labels_clean = np.ascontiguousarray(labels)
         
-        metrics = metric.compute(
-            predictions=preds_clean, 
-            references=labels_clean, 
-            num_labels=num_classes, 
-            ignore_index=255, 
-            reduce_labels=False
+        # Extraction de la classe dominante par pixel (Tenseur PyTorch)
+        preds = outputs.argmax(dim=1)
+        labels_tensor = torch.from_numpy(labels).long()
+        
+        metric_jaccard = MulticlassJaccardIndex(
+            num_classes=num_classes, 
+            average='macro', 
+            ignore_index=30
         )
-        return {"mean_iou": metrics["mean_iou"]}
+        
+        miou = metric_jaccard(preds, labels_tensor).item()
+        return {"mean_iou": miou}
     
 
 
