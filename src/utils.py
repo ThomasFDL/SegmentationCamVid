@@ -58,7 +58,7 @@ class CrossEntropyLoss(nn.Module):
     def forward(self, logits, targets):
         ce_loss = F.cross_entropy(logits, targets, ignore_index=self.ignore_index, reduction='none')
         
-        # 🛡️ FIX : Alignement strict sur l'exclusion du pixel 255 uniquement
+        
         mask_valid = (targets != self.ignore_index)
         
         if mask_valid.sum() == 0:
@@ -98,7 +98,7 @@ def compute_metrics(eval_pred, num_classes=32):
         preds = outputs.argmax(dim=1)
         labels_tensor = torch.from_numpy(labels).long()
         
-        # 🛡️ FIX : ignore_index est remis sur 255 pour évaluer la classe 30
+        
         metric_jaccard = MulticlassJaccardIndex(
             num_classes=num_classes, 
             average='macro', 
@@ -119,7 +119,7 @@ def evaluate_model(model, test_loader, num_classes=32, device=None):
     model.to(device)
     model.eval()
     
-    # 🛡️ FIX : ignore_index configuré sur 255 pour le calcul final du test mIoU
+
     miou_metric = MulticlassJaccardIndex(num_classes=num_classes, average='macro', ignore_index=255).to(device)
     
     print("Démarrage de l'évaluation")
