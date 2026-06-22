@@ -18,6 +18,8 @@ DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 def sync_device(device):
     if device.type == "mps":
         torch.mps.synchronize()
+    elif device.type == "cuda":
+        torch.cuda.synchronize()
 
 # ==========================================
 # 1. CONFIGURATION ET CHEMINS
@@ -25,8 +27,8 @@ def sync_device(device):
 NUM_CLASSES = 32
 CHECKPOINT = "nvidia/mit-b3"
 
-PATH_MODEL_PYTORCH = "./../CarSegm/model"  # Modèle original (Float32)
-PATH_MODEL_COREML  = "./../CarSegm/model_CoreML.mlpackage" # Modèle réduit CoreML
+PATH_MODEL_PYTORCH = "./../CarSegm/model"  
+PATH_MODEL_COREML  = "./../CarSegm/model_CoreML.mlpackage" 
 OUTPUT_CSV = "test_models.csv"  
 
 PATH_TEST = "./../CarSegm/CamVid"
@@ -43,18 +45,17 @@ processor = SegformerImageProcessor.from_pretrained(CHECKPOINT)
 test_dataset = CamVidDataset(
     images_dir=PATH_TEST_IMG, masks_dir=PATH_TEST_MSK, csv_path=PATH_TO_CSV, processor=processor, is_train=False  
 )
-test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False) # Batch_size=1 obligatoire pour CoreML
+test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False) 
 
 # ==========================================
 # 3. CHARGEMENT DES DEUX MODÈLES
 # ==========================================
-print("Initialisation du Modèle 1 (Original PyTorch Float32)...")
+print("Initialisation du Modèle 1 (Original PyTorch)")
 model_pytorch = get_segformer_model(checkpoint=PATH_MODEL_PYTORCH, num_classes=NUM_CLASSES)
 model_pytorch.to(DEVICE)
 model_pytorch.eval()
 
-print("Initialisation du Modèle 2 (Réduit CoreML FP16)...")
-# Note : Ce premier chargement va compiler le modèle pour le Neural Engine (peut prendre 1-2 min)
+print("Initialisation du Modèle 2 (Réduit CoreML)")
 model_coreml = ct.models.MLModel(PATH_MODEL_COREML)
 
 # Initialisation de la métrique globale mIoU (en ignorant la classe Void 255)
@@ -64,11 +65,10 @@ miou_metric = MulticlassJaccardIndex(num_classes=NUM_CLASSES, average='macro', i
 # 4. ÉVALUATION DU MODÈLE ORIGINAL (PYTORCH)
 # ==========================================
 print("\n" + "="*50)
-print("⏱️ Évaluation du Modèle Original PyTorch (Float32)...")
+print("Évaluation du Modèle Original PyTorch")
 miou_metric.reset()
 
-sync_device(DEVICE)
-start_time_1 = time.time()
+total_inference_time_pytorch = 0.0
 
 with torch.no_grad():
     for batch in test_loader:
@@ -78,29 +78,36 @@ with torch.no_grad():
         else:
             images, masks = batch[0].to(DEVICE), batch[1].to(DEVICE).long()
             
+        # --- MESURE DE L'INFÉRENCE BRUTE ---
+        sync_device(DEVICE)
+        start_inf = time.time()
+        
         outputs = model_pytorch(images)
+        
+        sync_device(DEVICE)
+        total_inference_time_pytorch += (time.time() - start_inf)
+        # -----------------------------------
+        
         logits = outputs.logits if hasattr(outputs, 'logits') else outputs
         
-        # Redimensionnement des logits à la taille du masque
+        # Redimensionnement des logits à la taille du masque (Traitement post-inférence)
         upsampled_logits = torch.nn.functional.interpolate(
             logits, size=masks.shape[1:], mode='bilinear', align_corners=False
         )
         preds = torch.argmax(upsampled_logits, dim=1)
         miou_metric.update(preds, masks)
 
-sync_device(DEVICE)
-duration_1 = time.time() - start_time_1
 miou_1 = miou_metric.compute().item()
-print(f"✅ Terminé | mIoU: {miou_1*100:.2f}% | Temps: {duration_1:.2f}s")
+print(f"✅ Terminé | mIoU: {miou_1*100:.2f}% | Temps d'inférence pur: {total_inference_time_pytorch:.4f}s")
 
 # ==========================================
 # 5. ÉVALUATION DU MODÈLE RÉDUIT (COREML FP16)
 # ==========================================
 print("\n" + "="*50)
-print("⏱️ Évaluation du Modèle Réduit CoreML (Float16)...")
+print("Évaluation du Modèle Réduit CoreML.")
 miou_metric.reset()
 
-start_time_2 = time.time()
+total_inference_time_coreml = 0.0
 
 for batch in test_loader:
     if isinstance(batch, dict):
@@ -111,10 +118,16 @@ for batch in test_loader:
         
     # Extraction et conversion du tenseur d'entrée au format NumPy pour CoreML
     np_images = images_torch.cpu().numpy()
-    
-    # Inférence ultra-rapide exécutée sur le Neural Engine
     coreml_inputs = {"pixel_values": np_images}
+    
+    # --- MESURE DE L'INFÉRENCE BRUTE ---
+
+    start_inf = time.time()
+    
     predictions = model_coreml.predict(coreml_inputs)
+    
+    total_inference_time_coreml += (time.time() - start_inf)
+    # -----------------------------------
     
     # Récupération dynamique du tenseur de sortie des logits (forme: 1, 32, 128, 128)
     output_key = list(predictions.keys())[0]
@@ -130,20 +143,19 @@ for batch in test_loader:
     preds = torch.argmax(upsampled_logits, dim=1)
     miou_metric.update(preds, masks_torch)
 
-duration_2 = time.time() - start_time_2
 miou_2 = miou_metric.compute().item()
-print(f"✅ Terminez | mIoU: {miou_2*100:.2f}% | Temps: {duration_2:.2f}s")
+print(f"✅ Terminé | mIoU: {miou_2*100:.2f}% | Temps d'inférence pur: {total_inference_time_coreml:.4f}s")
 
 # ==========================================
 # 6. ENREGISTREMENT DANS LE FICHIER CSV
 # ==========================================
-print(f"\n✍️ Enregistrement des résultats dans {OUTPUT_CSV}...")
+print(f"\nEnregistrement des résultats dans {OUTPUT_CSV}...")
 
-headers = ["Metric", "Framework", "Precision", "Score_Raw", "Score_Percentage", "Inference_Time_Seconds"]
+headers = ["Metric", "Framework", "Precision", "Score_Raw", "Score_Percentage", "Pure_Inference_Time_Seconds"]
 
 rows = [
-    ["mIoU", "PyTorch (Original)", "Float32", f"{miou_1:.4f}", f"{miou_1 * 100:.2f}%", f"{duration_1:.2f}"],
-    ["mIoU", "CoreML (Réduit)", "Float16", f"{miou_2:.4f}", f"{miou_2 * 100:.2f}%", f"{duration_2:.2f}"]
+    ["mIoU", "PyTorch (Original)", "Float32", f"{miou_1:.4f}", f"{miou_1 * 100:.2f}%", f"{total_inference_time_pytorch:.4f}"],
+    ["mIoU", "CoreML (Réduit)", "Float16", f"{miou_2:.4f}", f"{miou_2 * 100:.2f}%", f"{total_inference_time_coreml:.4f}"]
 ]
 
 with open(OUTPUT_CSV, mode="w", newline="", encoding="utf-8") as f:
@@ -151,4 +163,4 @@ with open(OUTPUT_CSV, mode="w", newline="", encoding="utf-8") as f:
     writer.writerow(headers)
     writer.writerows(rows)
 
-print("🏆 Banc d'essai CoreML finalisé avec succès !")
+print("Banc d'essai CoreML finalisé avec succès !")

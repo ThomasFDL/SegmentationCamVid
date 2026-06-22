@@ -79,8 +79,8 @@ training_args = TrainingArguments(
     
     # SÉCURITÉ ANTI-SATURATION MEMOIRE (KAGGLE)
     load_best_model_at_end=True,         
-    metric_for_best_model="eval_loss", 
-    greater_is_better=False,             
+    metric_for_best_model="eval_mean_iou", 
+    greater_is_better=True,             
     save_total_limit=2,                  
 )
 
@@ -90,7 +90,7 @@ trainer = SegmentationTrainer(
     train_dataset=train_dataset, 
     eval_dataset=val_dataset,            
     compute_metrics=compute_metrics, 
-    callbacks=[EarlyStoppingCallback(early_stopping_patience=15)],
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=20)],
     num_classes=NUM_CLASSES,
                 
 )
