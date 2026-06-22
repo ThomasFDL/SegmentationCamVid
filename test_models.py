@@ -151,11 +151,11 @@ print(f"✅ Terminé | mIoU: {miou_2*100:.2f}% | Temps d'inférence pur: {total_
 # ==========================================
 print(f"\nEnregistrement des résultats dans {OUTPUT_CSV}...")
 
-headers = ["Metric", "Framework", "Precision", "Score_Raw", "Score_Percentage", "Pure_Inference_Time_Seconds"]
+headers = ["Metric", "Precision", "Score_Raw", "Score_Percentage", "Time_Inference"]
 
 rows = [
-    ["mIoU", "PyTorch (Original)", "Float32", f"{miou_1:.4f}", f"{miou_1 * 100:.2f}%", f"{total_inference_time_pytorch:.4f}"],
-    ["mIoU", "CoreML (Réduit)", "Float16", f"{miou_2:.4f}", f"{miou_2 * 100:.2f}%", f"{total_inference_time_coreml:.4f}"]
+    ["mIoU", "PyTorch (Original)", f"{miou_1:.4f}", f"{miou_1 * 100:.2f}%", f"{total_inference_time_pytorch:.4f}"],
+    ["mIoU", "CoreML (Réduit)", f"{miou_2:.4f}", f"{miou_2 * 100:.2f}%", f"{total_inference_time_coreml:.4f}"]
 ]
 
 with open(OUTPUT_CSV, mode="w", newline="", encoding="utf-8") as f:
