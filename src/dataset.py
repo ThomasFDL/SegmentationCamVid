@@ -26,9 +26,9 @@ class CamVidDataset(Dataset):
     
         # 2. Changements météo / luminosité 
         A.OneOf([
-         A.RandomBrightnessContrast(p=1.0),
-            A.ColorJitter(p=1.0),
-            A.RandomShadow(p=0.5),
+         A.RandomBrightnessContrast(p=0.4),
+            A.ColorJitter(p=0.3),
+            A.RandomShadow(p=0.3),
         ], p=0.6), # Sélectionne aléatoirement UNE des trois transformations avec 60% de chance
     
         # 3. Flou de mouvement ou bruit de caméra
