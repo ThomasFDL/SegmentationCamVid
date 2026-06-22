@@ -68,8 +68,8 @@ class CrossEntropyLoss(nn.Module):
         # Calcul par pixel sans réduction automatique
         ce_loss = F.cross_entropy(logits, targets, ignore_index=self.ignore_index, reduction='none')
         
-        # Filtre identique à la Dice Loss pour exclure aussi la classe 30
-        mask_valid = (targets != self.ignore_index) & (targets != 30)
+        
+        mask_valid = (targets != self.ignore_index) 
         
         if mask_valid.sum() == 0:
             return torch.tensor(0.0, device=logits.device)
@@ -89,7 +89,7 @@ class DiceLoss(nn.Module):
     def forward(self, logits, targets):
         probs = F.softmax(logits, dim=1)
         
-        mask_valid = (targets != self.ignore_index) & (targets != 30)
+        mask_valid = (targets != self.ignore_index) 
         targets_clean = targets.clone()
         targets_clean[~mask_valid] = 0
         
@@ -128,7 +128,7 @@ class FocalLoss(nn.Module):
         focal_loss = ((1 - pt) ** self.gamma) * ce_loss
         
         # On ne fait la moyenne que sur les pixels valides
-        mask_valid = (targets != self.ignore_index) & (targets != 30)
+        mask_valid = (targets != self.ignore_index) 
         if mask_valid.sum() == 0:
             return torch.tensor(0.0, device=logits.device)
             
