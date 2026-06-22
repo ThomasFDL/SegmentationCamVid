@@ -18,19 +18,28 @@ class CamVidDataset(Dataset):
         self.is_train = is_train
 
         # Définition du pipeline de Data Augmentation (appliqué uniquement si is_train=True)
+     
         self.transform = A.Compose([
-            A.HorizontalFlip(p=0.5),                  
-            A.RandomBrightnessContrast(p=0.3),         # Ajuste la luminosité
-            A.ShiftScaleRotate(
-                shift_limit=0.05, 
-                scale_limit=0.05, 
-                rotate_limit=10, 
-                p=0.4, 
-                border_mode=0,                         # Remplit les pixels hors de l'image
-                cval=(0, 0, 0),       
-                mask_cval=255         
-            ), 
-        ])
+        # 1. Ajustement géométrique de base
+        A.Resize(height=512, width=512), 
+        A.HorizontalFlip(p=0.5), 
+    
+        # 2. Changements météo / luminosité 
+        A.OneOf([
+         A.RandomBrightnessContrast(p=1.0),
+            A.ColorJitter(p=1.0),
+            A.RandomShadow(p=0.5),
+        ], p=0.6), # Sélectionne aléatoirement UNE des trois transformations avec 60% de chance
+    
+        # 3. Flou de mouvement ou bruit de caméra
+        A.OneOf([
+            A.GaussianBlur(p=0.5),
+            A.GaussNoise(p=0.5),
+        ], p=0.3),
+    
+        # 4. Préparation pour PyTorch
+        A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+])
 
     def _load_color_mapping(self, csv_path):
         """
