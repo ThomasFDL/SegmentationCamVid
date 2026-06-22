@@ -1,9 +1,5 @@
 # SegmentationCamVid
 
-[![Python](https://shields.io)](https://python.org)
-[![PyTorch](https://shields.io)](https://pytorch.org)
-[![HuggingFace](https://shields.io)](https://huggingface.co)
-[![CoreML](https://shields.io)](https://apple.com)
 
 **SegmentationCamVid** est un petit projet personnel que j'ai développé pour découvrir le domaine de la segmentation sémantique. L'objectif est de classifier chaque pixel d'une scène routière en temps réel parmi 32 classes (route, trottoir, piéton, voiture, etc.) en utilisant le jeu de données **CamVid**.
 
