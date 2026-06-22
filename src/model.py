@@ -1,7 +1,7 @@
 from transformers import SegformerForSemanticSegmentation
 import torch.nn.functional as F
 from transformers import Trainer
-from src.utils import ComboDiceFocalLoss
+from src.utils import ComboLoss
 
 
 def get_segformer_model(checkpoint="nvidia/mit-b3", num_classes = 32):
@@ -25,7 +25,7 @@ class SegmentationTrainer(Trainer):
         self.num_classes = num_classes
         
         # Instanciation de la fonction de perte 
-        self.loss_fn = ComboDiceFocalLoss(
+        self.loss_fn = ComboLoss(
             num_classes=self.num_classes, 
             gamma=2.0, 
             ignore_index=255
