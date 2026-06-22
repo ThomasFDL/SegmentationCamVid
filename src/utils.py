@@ -7,6 +7,27 @@ from torchmetrics.classification import MulticlassJaccardIndex
 
 metric = evaluate.load("mean_iou")
 
+class MulticlassCrossEntropyLoss(nn.Module):
+    """
+    Implementation de la Cross Entropy Loss pour la segmentation multi-classes.
+    """
+    def __init__(self, ignore_index=255):
+        super().__init__()
+        self.ignore_index = ignore_index
+
+    def forward(self, logits, targets):
+        # Calcul par pixel sans réduction automatique
+        ce_loss = F.cross_entropy(logits, targets, ignore_index=self.ignore_index, reduction='none')
+        
+        # Filtre identique à la Dice Loss pour exclure aussi la classe 30
+        mask_valid = (targets != self.ignore_index) & (targets != 30)
+        
+        if mask_valid.sum() == 0:
+            return torch.tensor(0.0, device=logits.device)
+            
+        return ce_loss[mask_valid].mean()
+
+
 class MulticlassDiceLoss(nn.Module):
     """
     Implementation de la Dice Loss pour la segmentation multi-classes.
@@ -72,13 +93,15 @@ class ComboDiceFocalLoss(nn.Module):
     def __init__(self, num_classes, gamma=2.0, ignore_index=255):
         super().__init__()
         self.dice = MulticlassDiceLoss(num_classes, ignore_index)
-        self.focal = MulticlassFocalLoss(num_classes, gamma, ignore_index)
+        #self.focal = MulticlassFocalLoss(num_classes, gamma, ignore_index)
+        self.ce = MulticlassCrossEntropyLoss(ignore_index)
 
     def forward(self, logits, targets):
         dice_loss = self.dice(logits, targets)
-        focal_loss = self.focal(logits, targets)
-        
-        return 0.5 * dice_loss + 0.5 * focal_loss
+        #focal_loss = self.focal(logits, targets)
+        ce_loss = self.ce(logits, targets)
+
+        return 0.5 * dice_loss + 0.5 * ce_loss
 
 
 def compute_metrics(eval_pred, num_classes=32):

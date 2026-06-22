@@ -26,7 +26,7 @@ NUM_CLASSES = 32
 CHECKPOINT = "nvidia/mit-b3"
 
 PATH_MODEL_PYTORCH = "./../CarSegm/model"  # Modèle original (Float32)
-PATH_MODEL_COREML  = "./../CarSegm/model_segformer_fp16.mlpackage" # Modèle réduit CoreML
+PATH_MODEL_COREML  = "./../CarSegm/model_CoreML.mlpackage" # Modèle réduit CoreML
 OUTPUT_CSV = "test_models.csv"  
 
 PATH_TEST = "./../CarSegm/CamVid"

@@ -2,20 +2,20 @@ import os
 import csv
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from tkinter import simpledialog  # Ajout pour la boîte de dialogue de démarrage
+from tkinter import simpledialog  
 import numpy as np
 import torch
 import cv2  
 from PIL import Image, ImageTk
 from transformers import SegformerImageProcessor, SegformerForSemanticSegmentation
-import coremltools as ct  # Ajout pour la gestion de CoreML
+import coremltools as ct  
 
 # ==========================================
 # CONFIGURATION LOCALE 
 # ==========================================
 CSV_FILE_PATH = "./CamVid/class_dict.csv"
-MODEL_PATH = "./mon_modele_final" 
-COREML_PATH = "./model_segformer_fp16.mlpackage"  # Chemin vers votre modèle CoreML
+MODEL_PATH = "./model" 
+COREML_PATH = "./model_CoreML.mlpackage"
 NUM_CLASSES = 32  
 
 class SelectionDialog(simpledialog.Dialog):
