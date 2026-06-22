@@ -76,7 +76,8 @@ python interface.py
 ---
 
 ## 🎓 Ce que ce projet m'a appris
-* L'utilisation de transformers comme modèle de segmentation sémantique
-* L'utilisation de fonctions de pertes combinées 
-* Le suivi de l'entraînement pour éviter l'overfitting.
-* L'importance du portage pour limiter l'inférence 
+* L'utilisation de transformers comme modèle de segmentation sémantique.
+* L'utilisation de fonctions de pertes combinées. 
+* L'importance de la data augmentation pour les petits datasets.
+* L'importance du choix des hyperparamètres.
+* L'importance du portage pour limiter l'inférence. 
