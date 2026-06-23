@@ -4,7 +4,7 @@ __pycache__/
 .ipynb_checkpoints/
 results_segformer/
 model/
-modelBis/
+PastModels/
 videos/
 temp_files/
 videos/
