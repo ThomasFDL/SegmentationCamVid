@@ -62,10 +62,10 @@ model = get_segformer_model(checkpoint=CHECKPOINT, num_classes=NUM_CLASSES)
 # ==========================================
 training_args = TrainingArguments(
     output_dir="./results_segformer", 
-    learning_rate=6e-5, 
+    learning_rate=1e-4, 
     num_train_epochs=200,                
-    per_device_train_batch_size=4, 
-    per_device_eval_batch_size=4, 
+    per_device_train_batch_size=16, 
+    per_device_eval_batch_size=16, 
     eval_strategy="epoch",         
     save_strategy="epoch", 
     logging_steps=10, 
@@ -77,7 +77,7 @@ training_args = TrainingArguments(
     report_to="tensorboard",
     run_name="SegFormer_CamVid_ComboLoss",                    
     
-    # SÉCURITÉ ANTI-SATURATION MEMOIRE (KAGGLE)
+    # SÉCURITÉ ANTI-SATURATION MEMOIRE 
     load_best_model_at_end=True,         
     metric_for_best_model="eval_mean_iou", 
     greater_is_better=True,             
