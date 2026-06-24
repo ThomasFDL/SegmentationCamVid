@@ -15,7 +15,7 @@ class CamVidDataset(Dataset):
         self.color_to_class = self._load_color_mapping(csv_path)
         self.is_train = is_train
 
-        # Pipeline d'ENTRAÎNEMENT : Augmentations géométriques et colorimétriques
+        # Pipeline d'ENTRAÎNEMENT 
         self.train_transform = A.Compose([ 
             A.HorizontalFlip(p=0.5), 
             
@@ -31,11 +31,12 @@ class CamVidDataset(Dataset):
                 A.GaussianBlur(p=1.0),
                 A.GaussNoise(p=1.0),
             ], p=0.3),
-            
-            
         ])
 
-        
+        # CORRECTION 1 : Définir val_transform pour éviter le plantage AttributeError
+        self.val_transform = A.Compose([
+            A.NoOp()  # Ne fait rien, garde l'image d'origine intacte
+        ])
 
     def _load_color_mapping(self, csv_path):
         mapping = {}
@@ -78,12 +79,14 @@ class CamVidDataset(Dataset):
         image = augmented['image']
         mask_indices = augmented['mask']
 
-       
+        
         inputs = self.processor(
             images=image, 
             segmentation_maps=mask_indices, 
             return_tensors="pt",
-            do_reduce_labels=False 
+            do_reduce_labels=False,
+            do_resize=False,        
+            do_rescale=True        
         )
         
         # Suppression de la dimension de batch parasite (1, C, H, W) -> (C, H, W)

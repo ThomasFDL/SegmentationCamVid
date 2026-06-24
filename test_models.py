@@ -1,6 +1,5 @@
 import os
 import csv
-import time
 import numpy as np
 import torch
 import coremltools as ct
@@ -11,7 +10,6 @@ from torchmetrics.classification import MulticlassJaccardIndex
 from src.dataset import CamVidDataset  
 from src.model import get_segformer_model
 
-# Force l'utilisation du GPU/MPS pour la partie PyTorch
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
@@ -21,14 +19,9 @@ def sync_device(device):
     elif device.type == "cuda":
         torch.cuda.synchronize()
 
-# ==========================================
-# 1. CONFIGURATION ET CHEMINS
-# ==========================================
 NUM_CLASSES = 32
 CHECKPOINT = "nvidia/mit-b3"
 
-PATH_MODEL_PYTORCH = "./../CarSegm/model"  
-PATH_MODEL_COREML  = "./../CarSegm/model_CoreML.mlpackage" 
 OUTPUT_CSV = "test_models.csv"  
 
 PATH_TEST = "./../CarSegm/CamVid"
@@ -36,9 +29,20 @@ PATH_TO_CSV  = os.path.join(PATH_TEST, "class_dict.csv")
 PATH_TEST_IMG = os.path.join(PATH_TEST, "test")
 PATH_TEST_MSK = os.path.join(PATH_TEST, "test_labels")
 
-# ==========================================
-# 2. PRÉPARATION DES DONNÉES
-# ==========================================
+def get_class_names(csv_path):
+    class_names = []
+    with open(csv_path, mode='r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            class_names.append(row['name'])
+    return class_names
+
+print("Lecture des noms de classes...")
+class_names_list = get_class_names(PATH_TO_CSV)
+
+if len(class_names_list) < NUM_CLASSES:
+    class_names_list += [f"Class_{i:02d}" for i in range(len(class_names_list), NUM_CLASSES)]
+
 print("Chargement du jeu de données Test...")
 processor = SegformerImageProcessor.from_pretrained(CHECKPOINT)
 
@@ -47,120 +51,90 @@ test_dataset = CamVidDataset(
 )
 test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False) 
 
-# ==========================================
-# 3. CHARGEMENT DES DEUX MODÈLES
-# ==========================================
-print("Initialisation du Modèle 1 (Original PyTorch)")
-model_pytorch = get_segformer_model(checkpoint=PATH_MODEL_PYTORCH, num_classes=NUM_CLASSES)
-model_pytorch.to(DEVICE)
-model_pytorch.eval()
+model_pytorch = None
+model_coreml = None
+framework_used = ""
 
-print("Initialisation du Modèle 2 (Réduit CoreML)")
-model_coreml = ct.models.MLModel(PATH_MODEL_COREML)
+if os.path.exists("./../CarSegm/model_CoreML.mlpackage"):
+    try:
+        print("Modèle CoreML détecté. Initialisation...")
+        model_coreml = ct.models.MLModel("./../CarSegm/model_CoreML.mlpackage")
+        framework_used = "CoreML"
+    except Exception as e:
+        print(f" Erreur lors du chargement de CoreML ({e}). Bascule sur PyTorch...")
+        model_coreml = None
 
-# Initialisation de la métrique globale mIoU (en ignorant la classe Void 255)
-miou_metric = MulticlassJaccardIndex(num_classes=NUM_CLASSES, average='macro', ignore_index=255).to(DEVICE)
+if model_coreml is None:
+    print(" Modèle CoreML absent ou défaillant. Initialisation du modèle PyTorch...")
+    model_pytorch = get_segformer_model(checkpoint="./../CarSegm/model", num_classes=NUM_CLASSES)
+    model_pytorch.to(DEVICE)
+    model_pytorch.eval()
+    framework_used = "PyTorch (Original)"
 
-# ==========================================
-# 4. ÉVALUATION DU MODÈLE ORIGINAL (PYTORCH)
-# ==========================================
-print("\n" + "="*50)
-print("Évaluation du Modèle Original PyTorch")
-miou_metric.reset()
+metric_macro = MulticlassJaccardIndex(num_classes=NUM_CLASSES, average='macro', ignore_index=255).to(DEVICE)
+metric_per_class = MulticlassJaccardIndex(num_classes=NUM_CLASSES, average='none', ignore_index=255).to(DEVICE)
 
-total_inference_time_pytorch = 0.0
+print(f"\n" + "="*50)
+print(f"Démarrage de l'évaluation avec : {framework_used}")
+metric_macro.reset()
+metric_per_class.reset()
 
 with torch.no_grad():
     for batch in test_loader:
         if isinstance(batch, dict):
-            images = batch.get("pixel_values").to(DEVICE)
-            masks = batch.get("labels").to(DEVICE).long()
+            images_torch = batch.get("pixel_values")
+            masks_torch = batch.get("labels").to(DEVICE).long()
         else:
-            images, masks = batch[0].to(DEVICE), batch[1].to(DEVICE).long()
+            images_torch, masks_torch = batch, batch.to(DEVICE).long()
             
-        # --- MESURE DE L'INFÉRENCE BRUTE ---
-        sync_device(DEVICE)
-        start_inf = time.time()
-        
-        outputs = model_pytorch(images)
-        
-        sync_device(DEVICE)
-        total_inference_time_pytorch += (time.time() - start_inf)
-        # -----------------------------------
-        
-        logits = outputs.logits if hasattr(outputs, 'logits') else outputs
-        
-        # Redimensionnement des logits à la taille du masque (Traitement post-inférence)
+        if model_coreml is not None:
+            np_images = images_torch.cpu().numpy()
+            coreml_inputs = {"pixel_values": np_images}
+            predictions = model_coreml.predict(coreml_inputs)
+            output_key = list(predictions.keys())[0]
+            logits_np = predictions[output_key]
+            logits_torch = torch.from_numpy(logits_np).to(DEVICE)
+            
+        else:
+            images_gpu = images_torch.to(DEVICE)
+            outputs = model_pytorch(images_gpu)
+            logits_torch = outputs.logits if hasattr(outputs, 'logits') else outputs
+
         upsampled_logits = torch.nn.functional.interpolate(
-            logits, size=masks.shape[1:], mode='bilinear', align_corners=False
+            logits_torch, size=masks_torch.shape[1:], mode='bilinear', align_corners=False
         )
         preds = torch.argmax(upsampled_logits, dim=1)
-        miou_metric.update(preds, masks)
-
-miou_1 = miou_metric.compute().item()
-print(f"✅ Terminé | mIoU: {miou_1*100:.2f}% | Temps d'inférence pur: {total_inference_time_pytorch:.4f}s")
-
-# ==========================================
-# 5. ÉVALUATION DU MODÈLE RÉDUIT (COREML FP16)
-# ==========================================
-print("\n" + "="*50)
-print("Évaluation du Modèle Réduit CoreML.")
-miou_metric.reset()
-
-total_inference_time_coreml = 0.0
-
-for batch in test_loader:
-    if isinstance(batch, dict):
-        images_torch = batch.get("pixel_values")
-        masks_torch = batch.get("labels").to(DEVICE).long()
-    else:
-        images_torch, masks_torch = batch[0], batch[1].to(DEVICE).long()
         
-    # Extraction et conversion du tenseur d'entrée au format NumPy pour CoreML
-    np_images = images_torch.cpu().numpy()
-    coreml_inputs = {"pixel_values": np_images}
-    
-    # --- MESURE DE L'INFÉRENCE BRUTE ---
+        metric_macro.update(preds, masks_torch)
+        metric_per_class.update(preds, masks_torch)
 
-    start_inf = time.time()
-    
-    predictions = model_coreml.predict(coreml_inputs)
-    
-    total_inference_time_coreml += (time.time() - start_inf)
-    # -----------------------------------
-    
-    # Récupération dynamique du tenseur de sortie des logits (forme: 1, 32, 128, 128)
-    output_key = list(predictions.keys())[0]
-    logits_np = predictions[output_key]
-    
-    # Transfert des logits NumPy vers un tenseur PyTorch pour centraliser le traitement
-    logits_torch = torch.from_numpy(logits_np).to(DEVICE)
-    
-    # Redimensionnement des logits à la taille originale du masque (128x128 -> 512x512)
-    upsampled_logits = torch.nn.functional.interpolate(
-        logits_torch, size=masks_torch.shape[1:], mode='bilinear', align_corners=False
-    )
-    preds = torch.argmax(upsampled_logits, dim=1)
-    miou_metric.update(preds, masks_torch)
+miou_global = metric_macro.compute().item()
+iou_per_class = metric_per_class.compute().cpu().numpy()
 
-miou_2 = miou_metric.compute().item()
-print(f"✅ Terminé | mIoU: {miou_2*100:.2f}% | Temps d'inférence pur: {total_inference_time_coreml:.4f}s")
+print(f" Évaluation terminée | mIoU Global: {miou_global*100:.2f}%")
 
-# ==========================================
-# 6. ENREGISTREMENT DANS LE FICHIER CSV
-# ==========================================
-print(f"\nEnregistrement des résultats dans {OUTPUT_CSV}...")
+print(f"\nEnregistrement des résultats épurés dans {OUTPUT_CSV}...")
 
-headers = ["Metric", "Precision", "Score_Raw", "Score_Percentage", "Time_Inference"]
+headers = ["Metric", "Framework", "Score_Raw", "Score_Percentage"]
 
 rows = [
-    ["mIoU", "PyTorch (Original)", f"{miou_1:.4f}", f"{miou_1 * 100:.2f}%", f"{total_inference_time_pytorch:.4f}"],
-    ["mIoU", "CoreML (Réduit)", f"{miou_2:.4f}", f"{miou_2 * 100:.2f}%", f"{total_inference_time_coreml:.4f}"]
+    ["mIoU Global", framework_used, f"{miou_global:.4f}", f"{miou_global * 100:.2f}%"],
 ]
+
+for class_idx in range(NUM_CLASSES):
+    val_raw = iou_per_class[class_idx]
+    class_name = class_names_list[class_idx] 
+    
+    rows.append([
+        class_name, 
+        framework_used, 
+        f"{val_raw:.4f}", 
+        f"{val_raw * 100:.2f}%"
+    ])
 
 with open(OUTPUT_CSV, mode="w", newline="", encoding="utf-8") as f:
     writer = csv.writer(f, delimiter=";")
     writer.writerow(headers)
     writer.writerows(rows)
 
-print("Banc d'essai CoreML finalisé avec succès !")
+print("Banc d'essai CamVid finalisé avec succès !")
