@@ -196,11 +196,11 @@ def evaluate_model(model, test_loader, num_classes=32, device=None):
         device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
         
     model.to(device)
+    metric.to(device)
     model.eval()
     
 
-    miou_metric = MulticlassJaccardIndex(num_classes=num_classes, average='macro', ignore_index=255).to(device)
-    
+   
     print("Démarrage de l'évaluation")
     
     with torch.no_grad():
@@ -224,9 +224,9 @@ def evaluate_model(model, test_loader, num_classes=32, device=None):
                 logits, size=masks.shape[1:], mode='bilinear', align_corners=False
             )
             preds = torch.argmax(upsampled_logits, dim=1)
-            miou_metric.update(preds, masks)
+            metric.update(preds, masks)
             
-    final_miou = miou_metric.compute().item()
+    final_miou = metric.compute().item()
     print(f"Score mIoU Final : {final_miou * 100:.2f}%")
     return final_miou
 
@@ -239,14 +239,9 @@ def evaluate_model_per_class(model, test_loader, num_classes=32, device=None):
         device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
         
     model.to(device)
+    metric.to(device)
     model.eval()
     
-    
-    miou_metric = MulticlassJaccardIndex(
-        num_classes=num_classes, 
-        average='none', 
-        ignore_index=255
-    ).to(device)
     
     print("Démarrage de l'évaluation détaillée...")
     
@@ -273,10 +268,10 @@ def evaluate_model_per_class(model, test_loader, num_classes=32, device=None):
             preds = torch.argmax(upsampled_logits, dim=1)
             
             # Accumulation des matrices de confusion pixel par pixel
-            miou_metric.update(preds, masks)
+            metric.update(preds, masks)
             
     # Extraction du tenseur contenant les IoU de chaque classe
-    iou_per_class = miou_metric.compute() # Tenseur de taille [32]
+    iou_per_class = metric.compute() # Tenseur de taille [32]
     
     print("\n" + "="*40)
     print("       SCORE IoU CLASSE PAR CLASSE      ")
