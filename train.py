@@ -62,11 +62,10 @@ model = get_segformer_model(checkpoint=CHECKPOINT, num_classes=NUM_CLASSES)
 # ==========================================
 training_args = TrainingArguments(
     output_dir="./results_segformer", 
-    learning_rate=8e-5, 
+    learning_rate=1e-4, 
     num_train_epochs=200,                
     per_device_train_batch_size=8, 
-    per_device_eval_batch_size=8,
-    gradient_accumulation_steps=2, 
+    per_device_eval_batch_size=8, 
     eval_strategy="epoch",         
     save_strategy="epoch", 
     logging_steps=10, 
