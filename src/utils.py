@@ -2,15 +2,19 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import evaluate
 from torchmetrics.classification import MulticlassJaccardIndex
 
-metric = evaluate.load("mean_iou")
+
+metric = MulticlassJaccardIndex(
+    num_classes=32, 
+    average='macro', 
+    ignore_index=255
+)
 
 
 class GeneralizedDiceLoss(nn.Module):
     """
-    Implémentation de la Generalized Dice Loss 
+    Implémentation de la Generalized Dice Loss
     """
     def __init__(self, num_classes, ignore_index=255, epsilon=1e-6):
         super().__init__()
@@ -21,14 +25,16 @@ class GeneralizedDiceLoss(nn.Module):
     def forward(self, logits, targets):
         probs = F.softmax(logits, dim=1)  
         
-    
+        # 1. Masquage de l'ignore_index (255)
         mask_valid = (targets != self.ignore_index) 
         targets_clean = targets.clone()
         targets_clean[~mask_valid] = 0
         
+        # 2. One-hot encoding
         targets_one_hot = F.one_hot(targets_clean, num_classes=self.num_classes)
         targets_one_hot = targets_one_hot.permute(0, 3, 1, 2).float() 
         
+        # Application du masque spatial sur les probabilités et les cibles
         mask_valid = mask_valid.unsqueeze(1) 
         probs = probs * mask_valid
         targets_one_hot = targets_one_hot * mask_valid
@@ -36,15 +42,59 @@ class GeneralizedDiceLoss(nn.Module):
         dims = (0, 2, 3)
         intersection = torch.sum(probs * targets_one_hot, dim=dims) 
         cardinality = torch.sum(probs + targets_one_hot, dim=dims)   
-        
         volumes = torch.sum(targets_one_hot, dim=dims)
-        weights = 1.0 / (volumes ** 2 + self.epsilon)
         
+        # 3. Identifier les classes réellement présentes dans ce batch
+        classes_presentes = (volumes > 0).float()
+        
+        # Calcul des poids (puissance 1 pour adoucir le déséquilibre sur CamVid)
+        weights = 1.0 / (volumes + self.epsilon)
+        
+        # On force le poids des classes absentes à 0 pour les exclure du calcul
+        weights = weights * classes_presentes
+        
+        # 4. Somme pondérée uniquement sur les classes présentes
         numerator = 2.0 * torch.sum(weights * intersection)
         denominator = torch.sum(weights * cardinality)
         
+        # Sécurité si le batch ne contient aucun pixel valide
+        if denominator == 0:
+            return torch.tensor(0.0, device=logits.device)
+            
         generalized_dice_score = (numerator + self.epsilon) / (denominator + self.epsilon)
+        
         return 1.0 - generalized_dice_score
+
+
+class DiceLoss(nn.Module):
+    """
+    Implementation de la Dice Loss.
+    """
+    def __init__(self, num_classes, ignore_index=255):
+        super().__init__()
+        self.num_classes = num_classes
+        self.ignore_index = ignore_index
+
+    def forward(self, logits, targets):
+        probs = F.softmax(logits, dim=1)
+        
+        mask_valid = (targets != self.ignore_index)
+        targets_clean = targets.clone()
+        targets_clean[~mask_valid] = 0
+        
+        targets_one_hot = F.one_hot(targets_clean, num_classes=self.num_classes).permute(0, 3, 1, 2).float()
+        
+        mask_valid = mask_valid.unsqueeze(1)
+        probs = probs * mask_valid
+        targets_one_hot = targets_one_hot * mask_valid
+
+        dims = (0, 2, 3)
+        intersection = torch.sum(probs * targets_one_hot, dim=dims)
+        cardinality = torch.sum(probs + targets_one_hot, dim=dims)
+        
+        dice_score = (2. * intersection + 1e-6) / (cardinality + 1e-6)
+        return 1.0 - dice_score.mean()
+
 
 
 class FocalLoss(nn.Module):
@@ -104,15 +154,15 @@ class CrossEntropyLoss(nn.Module):
 
 class ComboLoss(nn.Module):
     """
-    Combine la Generalized Dice Loss et la Cross Entropy Loss.
+    Combine la Dice Loss et la Focal Loss.
     """
     def __init__(self, num_classes, gamma=2.0, ignore_index=255):
         super().__init__()
-        self.gdice = GeneralizedDiceLoss(num_classes, ignore_index)
+        self.dice = DiceLoss(num_classes, ignore_index)
         self.focal = FocalLoss(num_classes, gamma=2.0, ignore_index=ignore_index)
 
     def forward(self, logits, targets):
-        dice_loss = self.gdice(logits, targets)
+        dice_loss = self.dice(logits, targets)
         focal_loss = self.focal(logits, targets)
 
         return 0.5 * dice_loss + 0.5 * focal_loss
@@ -134,13 +184,7 @@ def compute_metrics(eval_pred, num_classes=32):
         labels_tensor = torch.from_numpy(labels).long()
         
         
-        metric_jaccard = MulticlassJaccardIndex(
-            num_classes=num_classes, 
-            average='macro', 
-            ignore_index=255
-        )
-        
-        miou = metric_jaccard(preds, labels_tensor).item()
+        miou = metric(preds, labels_tensor).item()
         return {"mean_iou": miou}
     
 
@@ -231,14 +275,14 @@ def evaluate_model_per_class(model, test_loader, num_classes=32, device=None):
             # Accumulation des matrices de confusion pixel par pixel
             miou_metric.update(preds, masks)
             
-    # 📊 Extraction du tenseur contenant les IoU de chaque classe
+    # Extraction du tenseur contenant les IoU de chaque classe
     iou_per_class = miou_metric.compute() # Tenseur de taille [32]
     
     print("\n" + "="*40)
     print("       SCORE IoU CLASSE PAR CLASSE      ")
     print("="*40)
     
-    # Affichage propre dans votre console
+    
     for class_idx, iou_value in enumerate(iou_per_class):
         # Convertir le tenseur en valeur Python native
         iou_val = iou_value.item() * 100
