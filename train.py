@@ -100,6 +100,7 @@ training_args = TrainingArguments(
     num_train_epochs=200,                
     per_device_train_batch_size=8, 
     per_device_eval_batch_size=8, 
+    gradient_accumulation_steps=2,
     eval_strategy="epoch",         
     save_strategy="epoch", 
     logging_steps=10, 
