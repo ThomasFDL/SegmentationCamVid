@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from src.dataset import CamVidDataset  
 from src.model import get_model
 from src.utils import compute_metrics
-from src.utils import ComboLoss
+from src.utils import combo_loss
 
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -25,11 +25,6 @@ class CamVidTrainer(Trainer):
     def __init__(self, *args, num_classes=32, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_classes = num_classes
-        self.loss_fn = ComboLoss(
-            num_classes=self.num_classes, 
-            gamma=2.0, 
-            ignore_index=255
-        )
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         # 1. Extraction des données et propagation avant (Forward)
@@ -41,9 +36,14 @@ class CamVidTrainer(Trainer):
         upsampled_logits = F.interpolate(
             logits, size=labels.shape[1:], mode='bilinear', align_corners=False
         )
-        
-        # 3. Calcul direct de la perte 
-        total_loss = self.loss_fn(upsampled_logits, labels)
+
+        # 3. Calcul de la perte 
+        total_loss = combo_loss(
+            logits=upsampled_logits,
+            targets=labels,
+            num_classes=self.num_classes,
+            ignore_index=255
+        )
         
         return (total_loss, outputs) if return_outputs else total_loss
 
