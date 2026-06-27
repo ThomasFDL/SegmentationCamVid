@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torchmetrics.classification import MulticlassJaccardIndex
 
@@ -16,72 +17,92 @@ metric_per_class = MulticlassJaccardIndex(
 )
 
 
-def dice_loss(logits, targets, num_classes, ignore_index=255):
-    """
-    Calcule la Dice Loss entre les prédictions (logits) et les cibles (targets).
-    """
-    probs = F.softmax(logits, dim=1)
-    
-    # Filtrage des pixels à ignorer
-    mask_valid = (targets != ignore_index)
-    targets_clean = targets.clone()
-    targets_clean[~mask_valid] = 0
-    
-    # Encodage des étiquettes
-    targets_one_hot = F.one_hot(targets_clean, num_classes=num_classes).permute(0, 3, 1, 2).float()
-    
-    # Application du masque de validité
-    mask_valid = mask_valid.unsqueeze(1)
-    probs = probs * mask_valid
-    targets_one_hot = targets_one_hot * mask_valid
+class DiceLoss(nn.Module):
+    def __init__(self, num_classes, ignore_index=255):
+        super().__init__()
+        self.num_classes = num_classes
+        self.ignore_index = ignore_index
 
-    # Réduction sur le batch, la hauteur et la largeur
-    dims = (0, 2, 3)
-    intersection = torch.sum(probs * targets_one_hot, dim=dims)
-    cardinality = torch.sum(probs + targets_one_hot, dim=dims)
-    
-    # Calcul du score et de la perte
-    dice_score = (2. * intersection + 1e-6) / (cardinality + 1e-6)
-    return 1.0 - dice_score.mean()
+    def forward(self, logits, targets):
+        """
+        Calcule la Dice Loss entre les prédictions (logits) et les cibles (targets).
+        """
+        probs = F.softmax(logits, dim=1)
+        
+        # Filtrage des pixels à ignorer
+        mask_valid = (targets != self.ignore_index)
+        targets_clean = targets.clone()
+        targets_clean[~mask_valid] = 0
+        
+        # Encodage des étiquettes
+        targets_one_hot = F.one_hot(targets_clean, num_classes=self.num_classes).permute(0, 3, 1, 2).float()
+        
+        # Application du masque de validité
+        mask_valid = mask_valid.unsqueeze(1)
+        probs = probs * mask_valid
+        targets_one_hot = targets_one_hot * mask_valid
 
-
-
-def focal_loss(logits, targets, gamma=2.0, ignore_index=255):
-    """
-    Calcule la Focal Loss entre les prédictions (logits) et les cibles (targets).
-    """
-    # 1. Calcul de la Cross Entropy classique pixel par pixel (sans réduction)
-    ce_loss = F.cross_entropy(
-        logits, 
-        targets, 
-        ignore_index=ignore_index, 
-        reduction='none'
-    )
-    
-    # 2. Calcul de pt : la probabilité que le modèle a attribuée à la BONNE classe
-    pt = torch.exp(-ce_loss)
-    
-    # 3. Application de la formule de la Focal Loss : (1 - pt)^gamma * CE
-    focal_loss_value = ((1 - pt) ** gamma) * ce_loss
-    
-    # 4. Création du masque pour ne calculer la moyenne que sur les pixels valides
-    mask_valid = (targets != ignore_index)
-       
-    # 5. Retourne la moyenne de la focal loss
-    return focal_loss_value[mask_valid].mean()
+        # Réduction sur le batch, la hauteur et la largeur
+        dims = (0, 2, 3)
+        intersection = torch.sum(probs * targets_one_hot, dim=dims)
+        cardinality = torch.sum(probs + targets_one_hot, dim=dims)
+        
+        # Calcul du score et de la perte
+        dice_score = (2. * intersection + 1e-6) / (cardinality + 1e-6)
+        return 1.0 - dice_score.mean()
 
 
-def combo_loss(logits, targets, num_classes, gamma=2.0, ignore_index=255):
-    """
-    Combine la Dice Loss et la Focal Loss 
-    """
-    # Appel des deux fonctions indépendantes
-    d_loss = dice_loss(logits, targets, num_classes=num_classes, ignore_index=ignore_index)
-    f_loss = focal_loss(logits, targets, gamma=gamma, ignore_index=ignore_index)
-    
-    # Combinaison linéaire des deux pertes
-    return (0.5 * d_loss) + (0.5 * f_loss)
 
+class FocalLoss(nn.Module):
+    def __init__(self, gamma=2.0, ignore_index=255):
+        super().__init__()
+        self.gamma = gamma
+        self.ignore_index = ignore_index
+
+    def forward(self, logits, targets):
+        """
+        Calcule la Focal Loss entre les prédictions (logits) et les cibles (targets).
+        """
+        # 1. Calcul de la Cross Entropy classique pixel par pixel (sans réduction)
+        ce_loss = F.cross_entropy(
+            logits, 
+            targets, 
+            ignore_index=self.ignore_index, 
+            reduction='none'
+        )
+        
+        # 2. Calcul de pt : la probabilité que le modèle a attribuée à la BONNE classe
+        pt = torch.exp(-ce_loss)
+        
+        # 3. Application de la formule de la Focal Loss : (1 - pt)^gamma * CE
+        focal_loss_value = ((1 - pt) ** self.gamma) * ce_loss
+        
+        # 4. Création du masque pour ne calculer la moyenne que sur les pixels valides
+        mask_valid = (targets != self.ignore_index)
+           
+        # 5. Retourne la moyenne de la focal loss
+        return focal_loss_value[mask_valid].mean()
+
+
+class ComboLoss(nn.Module):
+    def __init__(self, num_classes, gamma=2.0, ignore_index=255):
+        super().__init__()
+        self.num_classes = num_classes
+        self.gamma = gamma
+        self.ignore_index = ignore_index
+        self.dice = DiceLoss(num_classes=self.num_classes, ignore_index=self.ignore_index)
+        self.focal = FocalLoss(gamma=self.gamma, ignore_index=self.ignore_index)
+
+    def forward(self, logits, targets):
+        """
+        Combine la Dice Loss et la Focal Loss 
+        """
+        # Appel des deux fonctions indépendantes
+        d_loss = self.dice(logits, targets)
+        f_loss = self.focal(logits, targets)
+        
+        # Combinaison linéaire des deux pertes
+        return (0.5 * d_loss) + (0.5 * f_loss)
 
 
 def compute_metrics(eval_pred):
