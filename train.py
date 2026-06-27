@@ -1,5 +1,4 @@
 import os
-import torch
 import torch.nn.functional as F
 from transformers import (
     SegformerImageProcessor, 
@@ -9,18 +8,17 @@ from transformers import (
 )
 import matplotlib.pyplot as plt
 from src.dataset import CamVidDataset  
-from src.model import get_segformer_model
+from src.model import get_model
 from src.utils import compute_metrics
 from src.utils import combo_loss
 
-# SÉCURITÉ MULTI-GPU : On force l'utilisation du GPU numéro 0 uniquement
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 
 # ==========================================
 # 1. DEFINITION DE LA CLASSE TRAINER
 # ==========================================
 
-class SegmentationTrainer(Trainer):
+class CamVidTrainer(Trainer):
     """
     Trainer personnalisé pour une loss function personnalisée.
     """
@@ -59,10 +57,10 @@ LOCAL_PATH = "./CamVid"
 
 if os.path.exists(KAGGLE_PATH):
     BASE_PATH = KAGGLE_PATH
-    print("Environnement détecté : KAGGLE GPU CLOUD")
+    print("Environnement détecté : KAGGLE")
 else:
     BASE_PATH = LOCAL_PATH
-    print("Environnement détecté : MAC LOCAL CPU")
+    print("Environnement détecté : LOCAL")
 
 PATH_TO_CSV   = os.path.join(BASE_PATH, "class_dict.csv")
 PATH_TRAIN_IMG = os.path.join(BASE_PATH, "train")
@@ -85,34 +83,31 @@ val_dataset = CamVidDataset(
     images_dir=PATH_VAL_IMG, masks_dir=PATH_VAL_MSK, csv_path=PATH_TO_CSV, processor=processor, is_train=False  
 )
 
-print(f"Images d'entraînement : {len(train_dataset)} | Images de validation : {len(val_dataset)}")
-
 # ==========================================
 # 4. INSTANCIATION DU MODÈLE 
 # ==========================================
-model = get_segformer_model(checkpoint=CHECKPOINT, num_classes=NUM_CLASSES)
-
+model = get_model(checkpoint=CHECKPOINT, num_classes=NUM_CLASSES)
 
 
 # ==========================================
 # 5. CONFIGURATION DU GESTIONNAIRE D'ENTRAÎNEMENT
 # ==========================================
 training_args = TrainingArguments(
-    output_dir="./results_segformer", 
+    output_dir="./results", 
     learning_rate=1e-4, 
+    lr_scheduler_type="cosine", 
+    warmup_ratio=0.1, 
     num_train_epochs=200,                
     per_device_train_batch_size=8, 
     per_device_eval_batch_size=8, 
     eval_strategy="epoch",         
     save_strategy="epoch", 
     logging_steps=10, 
-    remove_unused_columns=False, 
-    use_cpu=False,                       
-    fp16=torch.cuda.is_available(), 
-    lr_scheduler_type="cosine", 
-    warmup_ratio=0.1,                    
+    remove_unused_columns=False,                       
+    fp16=True, 
+                       
     report_to="tensorboard",
-    run_name="SegFormer_CamVid_ComboLoss",                    
+    run_name="training_run",                    
     
     # SÉCURITÉ ANTI-SATURATION MEMOIRE 
     load_best_model_at_end=True,         
@@ -121,7 +116,7 @@ training_args = TrainingArguments(
     save_total_limit=2,                  
 )
 
-trainer = SegmentationTrainer(
+trainer = CamVidTrainer(
     model=model, 
     args=training_args, 
     train_dataset=train_dataset, 
@@ -133,7 +128,7 @@ trainer = SegmentationTrainer(
 )
 
 # ==========================================
-# 6. ENTRAÎNEMENT ET COURBES
+# 6. ENTRAÎNEMENT ET ENREGISTREMENT DES COURBES
 # ==========================================
 if __name__ == "__main__":
     print("Démarrage de l'entraînement")
@@ -142,7 +137,7 @@ if __name__ == "__main__":
     print("Extraction et sauvegarde du meilleur modèle...")
     trainer.save_model("./mon_modele_final")
     
-    print("Génération du graphique complet à 3 courbes séparées...")
+    print("Génération des graphiques d'entraînement...")
     history = trainer.state.log_history
     train_loss = [log["loss"] for log in history if "loss" in log]
     train_steps = [log["step"] for log in history if "loss" in log]

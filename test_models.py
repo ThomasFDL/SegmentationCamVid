@@ -1,6 +1,5 @@
 import os
 import csv
-import numpy as np
 import torch
 import coremltools as ct
 from transformers import SegformerImageProcessor
@@ -8,15 +7,8 @@ from torch.utils.data import DataLoader
 from torchmetrics.classification import MulticlassJaccardIndex
 from src.utils import evaluate_model
 from src.dataset import CamVidDataset  
-from src.model import get_segformer_model
+from src.model import get_model
 
-# Configuration du périphérique de calcul
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-
-def sync_device(device):
-    if device.type == "mps":
-        torch.mps.synchronize()
 
 
 def get_class_names(csv_path):
@@ -29,6 +21,7 @@ def get_class_names(csv_path):
     return class_names
 
 
+DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 # ==========================================
 # 1. CONFIGURATION ET CHEMINS DES DOSSIERS
 # ==========================================
@@ -62,15 +55,12 @@ model = None
 
 
 if choix == "1" and os.path.exists("./model_CoreML.mlpackage"):
-    try:
-        model = ct.models.MLModel("./model_CoreML.mlpackage")
-        print("Modèle CoreML chargé avec succès.")
-    except Exception:
-        print("Erreur CoreML, repli sur PyTorch.")
+    model = ct.models.MLModel("./model_CoreML.mlpackage")
+    print("Modèle CoreML chargé avec succès.")
 
 if choix == "2" or model is None:
-    model = get_segformer_model(checkpoint="./model", num_classes=NUM_CLASSES)
-    model.to(DEVICE).eval()
+    model = get_model(checkpoint="./model", num_classes=NUM_CLASSES)
+    model.eval()
     print("Modèle PyTorch chargé avec succès.")
 
 
@@ -80,16 +70,16 @@ if choix == "2" or model is None:
 print("\nDémarrage de l'évaluation du modèle...")
 if choix == "1":
     iou_per_class, miou_global = evaluate_model(model, test_loader, DEVICE, is_coreml=True)
-    print(f" Évaluation terminée | mIoU Global: {miou_global*100:.2f}%")
+    print(f" Évaluation terminée | mIoU : {miou_global*100:.2f}%")
 else:
     iou_per_class, miou_global = evaluate_model(model, test_loader, DEVICE, is_coreml=False)
-    print(f" Évaluation terminée | mIoU Global: {miou_global*100:.2f}%")
+    print(f" Évaluation terminée | mIoU : {miou_global*100:.2f}%")
 
 
 # ==========================================
 # 5. ÉCRITURE DES RÉSULTATS DANS UN FICHIER CSV
 # ==========================================
-print(f"\nEnregistrement des résultats épurés dans {OUTPUT_CSV}...")
+print(f"\nEnregistrement des résultats dans {OUTPUT_CSV}...")
 
 # Récupération et ajustement des noms de classes
 class_names_list = get_class_names(PATH_TO_CSV)
@@ -99,7 +89,7 @@ if len(class_names_list) < NUM_CLASSES:
 # Structuration des lignes du fichier CSV
 headers = ["Metric", "Score_Raw", "Score_Percentage"]
 rows = [
-    ["mIoU Global", f"{miou_global:.4f}", f"{miou_global * 100:.2f}%"],
+    ["mIoU", f"{miou_global:.4f}", f"{miou_global * 100:.2f}%"],
 ]
 
 for class_idx in range(NUM_CLASSES):

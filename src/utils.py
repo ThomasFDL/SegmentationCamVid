@@ -1,6 +1,4 @@
-import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from torchmetrics.classification import MulticlassJaccardIndex
 
@@ -29,7 +27,7 @@ def dice_loss(logits, targets, num_classes, ignore_index=255):
     targets_clean = targets.clone()
     targets_clean[~mask_valid] = 0
     
-    # Encodage One-Hot des étiquettes
+    # Encodage des étiquettes
     targets_one_hot = F.one_hot(targets_clean, num_classes=num_classes).permute(0, 3, 1, 2).float()
     
     # Application du masque de validité
@@ -63,21 +61,17 @@ def focal_loss(logits, targets, gamma=2.0, ignore_index=255):
     # 2. Calcul de pt : la probabilité que le modèle a attribuée à la BONNE classe
     pt = torch.exp(-ce_loss)
     
-    # 3. Application de la formule mathématique de la Focal Loss : (1 - pt)^gamma * CE
+    # 3. Application de la formule de la Focal Loss : (1 - pt)^gamma * CE
     focal_loss_value = ((1 - pt) ** gamma) * ce_loss
     
-    # 4. Création du masque pour ne calculer la moyenne que sur les pixels valides (!= ignore_index)
+    # 4. Création du masque pour ne calculer la moyenne que sur les pixels valides
     mask_valid = (targets != ignore_index)
-    
-    # Sécurité si le batch ne contient aucun pixel valide
-    if mask_valid.sum() == 0:
-        return torch.tensor(0.0, device=logits.device)
-        
-    # 5. Retourne la moyenne de la perte uniquement sur les pixels valides
+       
+    # 5. Retourne la moyenne de la focal loss
     return focal_loss_value[mask_valid].mean()
 
 
-def combo_loss(logits, targets, num_classes, gamma=2.0, ignore_index=255, weight_dice=0.5, weight_focal=0.5):
+def combo_loss(logits, targets, num_classes, gamma=2.0, ignore_index=255):
     """
     Combine la Dice Loss et la Focal Loss 
     """
@@ -86,7 +80,7 @@ def combo_loss(logits, targets, num_classes, gamma=2.0, ignore_index=255, weight
     f_loss = focal_loss(logits, targets, gamma=gamma, ignore_index=ignore_index)
     
     # Combinaison linéaire des deux pertes
-    return (weight_dice * d_loss) + (weight_focal * f_loss)
+    return (0.5 * d_loss) + (0.5 * f_loss)
 
 
 
