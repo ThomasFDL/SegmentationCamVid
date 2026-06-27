@@ -30,13 +30,13 @@ class CamVidDataset(Dataset):
                 A.RandomBrightnessContrast(p=1.0),
                 A.ColorJitter(p=1.0),
                 A.RandomShadow(p=1.0),
-            ], p=0.7),
+            ], p=0.6),
             
             # Flou ou bruit pour empêcher le surapprentissage 
             A.OneOf([
                 A.GaussianBlur(p=1.0),
                 A.GaussNoise(p=1.0),
-            ], p=0.4),
+            ], p=0.3),
         ])
 
     
@@ -90,9 +90,7 @@ class CamVidDataset(Dataset):
             images=image, 
             segmentation_maps=mask_indices, 
             return_tensors="pt",
-            do_reduce_labels=False,
-            do_resize=False,        
-            do_rescale=True        
+            do_reduce_labels=False,      
         )
         
         # Suppression de la dimension de batch parasite (1, C, H, W) -> (C, H, W)
