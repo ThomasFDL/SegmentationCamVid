@@ -13,7 +13,7 @@ from src.utils import compute_metrics
 from src.utils import ComboLoss
 
 
-
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # ==========================================
 # 1. DEFINITION DE LA CLASSE TRAINER
 # ==========================================

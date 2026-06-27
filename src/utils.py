@@ -184,4 +184,3 @@ def evaluate_model(model, test_loader, device="cpu", is_coreml=False):
     ious = metric_per_class.compute()
         
     return ious.cpu().numpy(), miou
-

@@ -98,9 +98,7 @@ class CamVidDataset(Dataset):
             images=image, 
             segmentation_maps=mask_indices, 
             return_tensors="pt",
-            do_reduce_labels=False, 
-            do_resize=False,  
-            do_rescale=True     
+            do_reduce_labels=False  
         )
         
         # Suppression de la dimension de batch parasite (1, C, H, W) -> (C, H, W)
