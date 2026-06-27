@@ -23,7 +23,7 @@ class CamVidDataset(Dataset):
 
         # Pipeline d'ENTRAÎNEMENT 
         self.train_transform = A.Compose([ 
-            A.Resize(512, 512),
+            A.Resize(height=512, width=512),
             A.HorizontalFlip(p=0.5), 
             
             # Changements de lumière 
