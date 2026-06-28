@@ -26,7 +26,7 @@ DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 # 1. CONFIGURATION ET CHEMINS DES DOSSIERS
 # ==========================================
 NUM_CLASSES = 32
-CHECKPOINT = "nvidia/mit-b3"
+CHECKPOINT = "nvidia/mit-b1"
 OUTPUT_CSV = "test_models.csv"  
 PATH_TEST = "./CamVid"
 PATH_TO_CSV  = os.path.join(PATH_TEST, "class_dict.csv")
