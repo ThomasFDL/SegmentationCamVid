@@ -67,7 +67,7 @@ PATH_TRAIN_MSK = os.path.join(BASE_PATH, "train_labels")
 PATH_VAL_IMG   = os.path.join(BASE_PATH, "val")
 PATH_VAL_MSK   = os.path.join(BASE_PATH, "val_labels")
 
-CHECKPOINT = "nvidia/mit-b3"
+CHECKPOINT = "nvidia/mit-b1"
 NUM_CLASSES = 32
 
 # ==========================================
@@ -93,12 +93,12 @@ model = get_model(checkpoint=CHECKPOINT, num_classes=NUM_CLASSES)
 # ==========================================
 training_args = TrainingArguments(
     output_dir="./results", 
-    learning_rate=8e-5, 
+    learning_rate=1e-4, 
     lr_scheduler_type="cosine", 
     warmup_ratio=0.1, 
     num_train_epochs=200,                
-    per_device_train_batch_size=4, 
-    per_device_eval_batch_size=4, 
+    per_device_train_batch_size=16, 
+    per_device_eval_batch_size=16, 
     eval_strategy="epoch",         
     save_strategy="epoch", 
     logging_steps=10, 
@@ -134,7 +134,7 @@ if __name__ == "__main__":
     trainer.train()
     
     print("Extraction et sauvegarde du meilleur modèle...")
-    trainer.save_model("./mon_modele_final")
+    trainer.save_model("./model")
     
     print("Génération des graphiques d'entraînement...")
     history = trainer.state.log_history
