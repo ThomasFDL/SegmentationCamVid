@@ -13,7 +13,7 @@ from src.utils import compute_metrics
 from src.utils import combo_loss
 
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 # ==========================================
 # 1. DEFINITION DE LA CLASSE TRAINER
 # ==========================================
@@ -94,11 +94,9 @@ model = get_model(checkpoint=CHECKPOINT, num_classes=NUM_CLASSES)
 training_args = TrainingArguments(
     output_dir="./results", 
     learning_rate=1e-4, 
-    lr_scheduler_type="cosine", 
-    warmup_ratio=0.1, 
     num_train_epochs=200,                
-    per_device_train_batch_size=16, 
-    per_device_eval_batch_size=16, 
+    per_device_train_batch_size=8, 
+    per_device_eval_batch_size=8, 
     eval_strategy="epoch",         
     save_strategy="epoch", 
     logging_steps=10, 
