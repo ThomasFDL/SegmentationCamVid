@@ -57,8 +57,8 @@ class CamVidDataset(Dataset):
                 #On ne prend pas en compte la classe 30 : Void
                 if idx == 30:
                      mapping[(int(row['r']), int(row['g']), int(row['b']))] = 255
-                     
-                mapping[(int(row['r']), int(row['g']), int(row['b']))] = idx
+                else:    
+                    mapping[(int(row['r']), int(row['g']), int(row['b']))] = idx
         return mapping
 
     def _rgb_to_class_indices(self, mask_rgb_array):
