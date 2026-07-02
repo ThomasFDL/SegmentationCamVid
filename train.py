@@ -14,42 +14,30 @@ from src.utils import combo_loss
 
 
 
-# ==========================================
-# 1. DEFINITION DE LA CLASSE TRAINER
-# ==========================================
-
-class CamVidTrainer(Trainer):
+def compute_loss(outputs, labels, num_items_in_batch=None):
     """
-    Trainer personnalisé pour une loss function personnalisée.
+    Fonction de perte personnalisée pour le modèle SegFormer.
     """
-    def __init__(self, *args, num_classes=32, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.num_classes = num_classes
 
-    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
-        # 1. Extraction des données et propagation avant (Forward)
-        labels = inputs.get("labels").long()
-        outputs = model(**inputs)
-        logits = outputs.get("logits")
-        
-        # 2. Redimensionnement des logits à la taille originale du masque 
-        upsampled_logits = F.interpolate(
-            logits, size=labels.shape[1:], mode='bilinear', align_corners=False
-        )
+    logits = outputs.get("logits")
+    upsampled_logits = F.interpolate(
+        outputs, size=labels.shape[1:], mode='bilinear', align_corners=False
+    )
 
-        # 3. Calcul de la perte 
-        total_loss = combo_loss(
-            logits=upsampled_logits,
-            targets=labels,
-            num_classes=self.num_classes,
-            ignore_index=255
-        )
-        
-        return (total_loss, outputs) if return_outputs else total_loss
-
-
+    # 2. Calcul de la perte 
+    total_loss = combo_loss(
+        logits=upsampled_logits,
+        targets=labels,
+        num_classes=NUM_CLASSES,
+        ignore_index=255
+    )
+    
+    return total_loss
+    
+    
+   
 # ==========================================
-# 2. CHEMINS VERS LES DOSSIERS (TRAIN & VAL)
+# 1. CHEMINS VERS LES DOSSIERS (TRAIN & VAL)
 # ==========================================
 KAGGLE_PATH = "/kaggle/input/datasets/carlolepelaars/camvid/CamVid" 
 LOCAL_PATH = "./CamVid"
@@ -71,7 +59,7 @@ CHECKPOINT = "nvidia/mit-b1"
 NUM_CLASSES = 32
 
 # ==========================================
-# 3. INSTANCIATION DES DATASETS (TRAIN & VAL)
+# 2. INSTANCIATION DES DATASETS (TRAIN & VAL)
 # ==========================================
 processor = SegformerImageProcessor.from_pretrained(CHECKPOINT)
 
@@ -83,13 +71,13 @@ val_dataset = CamVidDataset(
 )
 
 # ==========================================
-# 4. INSTANCIATION DU MODÈLE 
+# 3. INSTANCIATION DU MODÈLE 
 # ==========================================
 model = get_model(checkpoint=CHECKPOINT, num_classes=NUM_CLASSES)
 
 
 # ==========================================
-# 5. CONFIGURATION DU GESTIONNAIRE D'ENTRAÎNEMENT
+# 4. CONFIGURATION DU GESTIONNAIRE D'ENTRAÎNEMENT
 # ==========================================
 training_args = TrainingArguments(
     output_dir="./results", 
@@ -101,8 +89,7 @@ training_args = TrainingArguments(
     save_strategy="epoch", 
     logging_steps=10, 
     remove_unused_columns=False,                       
-    fp16=True, 
-                       
+    fp16=True,          
     report_to="tensorboard",
     run_name="training_run",                    
     
@@ -113,11 +100,12 @@ training_args = TrainingArguments(
     save_total_limit=2,                  
 )
 
-trainer = CamVidTrainer(
+trainer = Trainer(
     model=model, 
     args=training_args, 
     train_dataset=train_dataset, 
-    eval_dataset=val_dataset,            
+    eval_dataset=val_dataset,   
+    compute_loss_func=compute_loss,         
     compute_metrics=compute_metrics, 
     callbacks=[EarlyStoppingCallback(early_stopping_patience=20)],
     num_classes=NUM_CLASSES,
@@ -125,7 +113,8 @@ trainer = CamVidTrainer(
 )
 
 # ==========================================
-# 6. ENTRAÎNEMENT ET ENREGISTREMENT DES COURBES
+# 5. ENTRAÎNEMENT ET ENREGISTREMENT DES COURBES
+#    (CODÉE PAR UNE IA)
 # ==========================================
 if __name__ == "__main__":
     print("Démarrage de l'entraînement")
