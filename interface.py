@@ -11,7 +11,7 @@ from transformers import SegformerImageProcessor, SegformerForSemanticSegmentati
 import coremltools as ct  
 
 # ==========================================
-# CONFIGURATION LOCALE 
+# INTERFACE ENTIÈREMENT CRÉEE PAR UNE IA
 # ==========================================
 CSV_FILE_PATH = "./CamVid/class_dict.csv"
 MODEL_PATH = "./model" 
