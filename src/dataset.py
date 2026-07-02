@@ -21,11 +21,10 @@ class CamVidDataset(Dataset):
         self.color_to_class = self._load_color_mapping(csv_path)
         self.is_train = is_train
 
-        # Pipeline d'ENTRAÎNEMENT 
+        # Data Augmentation 
         self.train_transform = A.Compose([ 
-            A.Resize(height=512, width=512),
             A.HorizontalFlip(p=0.5), 
-            
+
             # Changements de lumière 
             A.OneOf([
                 A.RandomBrightnessContrast(p=1.0),
@@ -38,10 +37,6 @@ class CamVidDataset(Dataset):
                 A.GaussianBlur(p=1.0),
                 A.GaussNoise(p=1.0),
             ], p=0.3),
-        ])
-
-        self.val_transform = A.Compose([
-            A.Resize(height=512, width=512), 
         ])
 
     
@@ -91,12 +86,9 @@ class CamVidDataset(Dataset):
         # Application de la data augmentation
         if self.is_train:
             augmented = self.train_transform(image=image, mask=mask_indices)
-        else:
-            augmented = self.val_transform(image=image, mask=mask_indices)
-            
-        image = augmented['image']
-        mask_indices = augmented['mask']
-
+            image = augmented['image']
+            mask_indices = augmented['mask']
+      
         
         inputs = self.processor(
             images=image, 
