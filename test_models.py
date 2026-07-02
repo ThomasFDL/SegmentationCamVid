@@ -78,6 +78,7 @@ else:
 
 # ==========================================
 # 5. ÉCRITURE DES RÉSULTATS DANS UN FICHIER CSV
+#.   (CODÉE PAR UNE IA)
 # ==========================================
 print(f"\nEnregistrement des résultats dans {OUTPUT_CSV}...")
 
@@ -87,9 +88,9 @@ if len(class_names_list) < NUM_CLASSES:
     class_names_list += [f"Class_{i:02d}" for i in range(len(class_names_list), NUM_CLASSES)]
 
 # Structuration des lignes du fichier CSV
-headers = ["Metric", "Score_Raw", "Score_Percentage"]
+headers = ["Metric", "Score_Percentage"]
 rows = [
-    ["mIoU", f"{miou_global:.4f}", f"{miou_global * 100:.2f}%"],
+    ["mIoU", f"{miou_global * 100:.2f}%"],
 ]
 
 for class_idx in range(NUM_CLASSES):
@@ -98,7 +99,6 @@ for class_idx in range(NUM_CLASSES):
     
     rows.append([
         class_name, 
-        f"{val_raw:.4f}", 
         f"{val_raw * 100:.2f}%"
     ])
 
