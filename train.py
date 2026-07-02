@@ -21,7 +21,7 @@ def compute_loss(outputs, labels, num_items_in_batch=None):
 
     logits = outputs.get("logits")
     upsampled_logits = F.interpolate(
-        outputs, size=labels.shape[1:], mode='bilinear', align_corners=False
+        logits, size=labels.shape[1:], mode='bilinear', align_corners=False
     )
 
     # 2. Calcul de la perte 
