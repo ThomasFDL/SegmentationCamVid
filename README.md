@@ -48,7 +48,7 @@ Télechargez le dataset CamVid en cliquant [ici](https://www.kaggle.com/datasets
 
 Commencez par cloner le dépôt :
 ```bash
-git clone https://github.com/h2p6smyjkv-ops/SegmentationCamVid.git
+git clone https://github.com/ThomasFDL/SegmentationCamVid.git
 ```
 Installez ensuite les dépendances nécessaires au projet :
 ```bash
@@ -56,13 +56,13 @@ pip install -r requirements.txt
 ```
 
 ### 2. Entraîner le modèle (`train.py`)
-Pour entraîner le modèle à partir de zéro :
+Pour entraîner le modèle et générer les courbes d'apprentissages :
 ```bash
 python train.py
 ```
 
 ### 3. Évaluer sur le jeu de test (`test_models.py`)
-Pour calculer les performances des deux modèles sur les données de test de CamVid :
+Pour calculer le mIou et l'IoU par classe sur les données de test de CamVid :
 ```bash
 python test_models.py
 ```
@@ -80,14 +80,3 @@ python interface.py
 <img width="640" height="358" alt="démo" src="https://github.com/user-attachments/assets/fa9c1d56-5ab1-406f-b031-b9515e52742d" />
 
 
-
-
----
-
-## Ce que ce projet m'a appris
-* L'utilisation de transformers comme modèle de segmentation sémantique.
-* L'utilisation de fonctions de pertes combinées. 
-* L'importance de la data augmentation pour les petits datasets.
-* L'importance du choix des hyperparamètres.
-* L'importance du portage pour limiter l'inférence.
-* La maitrise de librairies comme pytorch, transformers, albumentations.
