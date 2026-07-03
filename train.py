@@ -4,6 +4,7 @@ from transformers import (
     SegformerImageProcessor, 
     TrainingArguments, 
     EarlyStoppingCallback,
+    TrainerCallback,
     Trainer
 )
 import matplotlib.pyplot as plt
@@ -12,6 +13,20 @@ from src.model import get_model
 from src.utils import compute_metrics
 from src.utils import combo_loss
 
+
+class UnfreezeBackboneCallback(TrainerCallback):
+    """
+    Callback personnalisé pour déverrouiller le backbone du modèle après un certain nombre d'époques.
+    """
+    def __init__(self, unfreeze_epoch=10):
+        self.unfreeze_epoch = unfreeze_epoch
+
+    def on_epoch_begin(self, args, state, control, **kwargs):
+        if round(state.epoch) == self.unfreeze_epoch:
+            model = kwargs['model']
+            for param in model.segformer.encoder.parameters():
+                param.requires_grad = True
+            
 
 
 def compute_loss(outputs, labels, num_items_in_batch=None):
@@ -55,14 +70,14 @@ PATH_TRAIN_MSK = os.path.join(BASE_PATH, "train_labels")
 PATH_VAL_IMG   = os.path.join(BASE_PATH, "val")
 PATH_VAL_MSK   = os.path.join(BASE_PATH, "val_labels")
 
-CHECKPOINT = "nvidia/mit-b1"
+CHECKPOINT = "nvidia/segformer-b1-finetuned-cityscapes-1024-1024"
 NUM_CLASSES = 32
 
 # ==========================================
 # 2. INSTANCIATION DES DATASETS (TRAIN & VAL)
 # ==========================================
 processor = SegformerImageProcessor.from_pretrained(CHECKPOINT)
-processor.size = {"height": 720, "width": 980} #Dimension de toutes les images du dataset CamVid
+processor.size = {"height": 720, "width": 960}
 
 train_dataset = CamVidDataset(
     images_dir=PATH_TRAIN_IMG, masks_dir=PATH_TRAIN_MSK, csv_path=PATH_TO_CSV, processor=processor, is_train=True  
@@ -82,7 +97,7 @@ model = get_model(checkpoint=CHECKPOINT, num_classes=NUM_CLASSES)
 # ==========================================
 training_args = TrainingArguments(
     output_dir="./results", 
-    learning_rate=1e-4, 
+    learning_rate=5e-5, 
     num_train_epochs=200,                
     per_device_train_batch_size=16, 
     per_device_eval_batch_size=16, 
@@ -108,7 +123,8 @@ trainer = Trainer(
     eval_dataset=val_dataset,   
     compute_loss_func=compute_loss,         
     compute_metrics=compute_metrics, 
-    callbacks=[EarlyStoppingCallback(early_stopping_patience=20)],
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=20),
+               UnfreezeBackboneCallback(unfreeze_epoch=10)],
     num_classes=NUM_CLASSES,
                 
 )

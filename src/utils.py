@@ -150,7 +150,7 @@ def evaluate_model(model, test_loader, device="cpu", is_coreml=False):
 
    
             
-            # Redimensionnement des logits à la taille originale du masque (Calcul exact)
+            # Redimensionnement des logits à la taille originale du masque 
             upsampled = F.interpolate(logits, size=masks.shape[1:], mode='bilinear', align_corners=False)
             preds = upsampled.argmax(dim=1)
             
