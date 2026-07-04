@@ -77,7 +77,7 @@ NUM_CLASSES = 32
 # 2. INSTANCIATION DES DATASETS (TRAIN & VAL)
 # ==========================================
 processor = SegformerImageProcessor.from_pretrained(CHECKPOINT)
-
+processor.size = {"height": 512, "width": 512} #Pour la gestion mémoire
 train_dataset = CamVidDataset(
     images_dir=PATH_TRAIN_IMG, masks_dir=PATH_TRAIN_MSK, csv_path=PATH_TO_CSV, processor=processor, is_train=True  
 )
