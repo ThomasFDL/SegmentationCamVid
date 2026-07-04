@@ -5,7 +5,8 @@ from transformers import (
     TrainingArguments, 
     EarlyStoppingCallback,
     TrainerCallback,
-    Trainer
+    Trainer,
+    AdamW
 )
 import matplotlib.pyplot as plt
 from src.dataset import CamVidDataset  
@@ -19,26 +20,38 @@ class UnfreezeBackboneCallback(TrainerCallback):
     Callback personnalisé pour déverrouiller le backbone du modèle après 
     un certain nombre d'époques, et gestion du LR.
     """
-    def __init__(self, unfreeze_epoch=10, reduced_lr=5e-5):
+    def __init__(self, unfreeze_epoch=10, reduced_lr_backbone=1e-5, reduced_lr_head=5e-5):
         self.unfreeze_epoch = unfreeze_epoch
-        self.reduced_lr = reduced_lr
+        self.reduced_lr_backbone = reduced_lr_backbone
+        self.reduced_lr_head = reduced_lr_head
         self.has_dropped = False
 
     def on_epoch_begin(self, args, state, control, **kwargs):
         if round(state.epoch) == self.unfreeze_epoch and not self.has_dropped:
-            optimizer = kwargs['optimizer']
-            model = kwargs['model']
-            if optimizer is not None:
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] = self.reduced_lr
-                print(f"Learning rate reduced to {self.reduced_lr} at epoch {state.epoch}.")
-                self.has_dropped = True
-                args.learning_rate = self.reduced_lr
-
-            for param in model.segformer.parameters():
-                param.requires_grad = True
             
-
+            model = kwargs['model']
+            for param in model.parameters():
+                param.requires_grad = True
+         
+            backbone_params = []
+            head_params = []
+            for name, param in model.named_parameters():
+                if "decode_head" in name:
+                    head_params.append(param)
+                else:
+                    backbone_params.append(param)
+                    
+            new_optimizer = AdamW([
+                {"params": backbone_params, "lr": self.reduced_lr_backbone},
+                {"params": head_params, "lr": self.reduced_lr_head}
+            ], weight_decay=0.01)
+            
+            kwargs['trainer'].optimizer = new_optimizer
+            args.learning_rate = self.reduced_lr_head
+            
+            print(f"Backbone unfrozen. LR set to {self.reduced_lr_backbone} (backbone) and {self.reduced_lr_head} (head) at epoch {state.epoch}.")
+            self.has_dropped = True
+            
 
 def compute_loss(outputs, labels, num_items_in_batch=None):
     """
