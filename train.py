@@ -124,8 +124,7 @@ trainer = Trainer(
     compute_loss_func=compute_loss,         
     compute_metrics=compute_metrics, 
     callbacks=[EarlyStoppingCallback(early_stopping_patience=20),
-               UnfreezeBackboneCallback(unfreeze_epoch=10)],
-    num_classes=NUM_CLASSES,
+               UnfreezeBackboneCallback(unfreeze_epoch=10)]
                 
 )
 

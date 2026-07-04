@@ -11,7 +11,7 @@ def get_model(checkpoint="nvidia/segformer-b1-finetuned-cityscapes-1024-1024", n
         ignore_mismatched_sizes=True
     )
     if freeze_backbone:
-        for param in model.segformer.encoder.parameters():
+        for param in model.segformer.parameters():
             param.requires_grad = False
     return model
 
