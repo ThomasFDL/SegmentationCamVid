@@ -48,13 +48,16 @@ class UnfreezeBackboneCallback(TrainerCallback):
                 {"params": head_params, "lr": self.reduced_lr_head}
             ], weight_decay=0.01)
             
+            # Calcul précis du nombre de pas restants jusqu'à la fin réelle des 200 époques
+            steps_restants = self.trainer.state.max_steps - self.trainer.state.global_step
+            
             new_scheduler = get_linear_schedule_with_warmup(
                 new_optimizer, 
                 num_warmup_steps=0, 
-                num_training_steps=self.trainer.state.max_steps
+                num_training_steps=steps_restants
             )
             
-            # Enregistrement Multi-GPU et FP16 pour éviter le crash du GradScaler
+            # Enregistrement Multi-GPU et FP16
             _, new_optimizer, new_scheduler = self.trainer.accelerator.prepare(
                 model, new_optimizer, new_scheduler
             )
@@ -62,14 +65,11 @@ class UnfreezeBackboneCallback(TrainerCallback):
             self.trainer.optimizer = new_optimizer
             self.trainer.lr_scheduler = new_scheduler
             
-            for _ in range(self.trainer.state.global_step):
-                self.trainer.lr_scheduler.step()
-            
             args.learning_rate = self.reduced_lr_head
             
             print(f"Backbone unfrozen. LR set to {self.reduced_lr_backbone} (backbone) and {self.reduced_lr_head} (head) at epoch {state.epoch}.")
             self.has_dropped = True
-       
+
 
 
 def compute_loss(outputs, labels, num_items_in_batch=None):
