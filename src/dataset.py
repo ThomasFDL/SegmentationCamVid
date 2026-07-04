@@ -7,8 +7,9 @@ import albumentations as A
 
 class CamVidDataset(Dataset):
     """
-    Dataset CamVid optimisé qui pré-charge et pré-convertit les masques en mémoire
-    pour éliminer le goulot d'étranglement du CPU.
+    Dataset personnalisé qui gère le chargement des paires d'images et de masques, la conversion 
+    des masques de couleur RGB vers des indices de classes utilisables par les fonctions 
+    de perte, et applique la data augmentation.
     """
     def __init__(self, images_dir, masks_dir, csv_path, processor, is_train=True):
         self.images_dir = images_dir

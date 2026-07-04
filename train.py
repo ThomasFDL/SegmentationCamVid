@@ -141,8 +141,8 @@ model = get_model(checkpoint=CHECKPOINT, num_classes=NUM_CLASSES)
 #Création du callback pour déverrouiller le backbone après 25 époques
 unfreeze_callback = UnfreezeBackboneCallback(
     unfreeze_epoch=25, 
-    reduced_lr_backbone=1e-5, 
-    reduced_lr_head=5e-5
+    reduced_lr_backbone=2e-5, 
+    reduced_lr_head=2e-4
 )
 
 training_args = TrainingArguments(
