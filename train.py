@@ -16,14 +16,24 @@ from src.utils import combo_loss
 
 class UnfreezeBackboneCallback(TrainerCallback):
     """
-    Callback personnalisé pour déverrouiller le backbone du modèle après un certain nombre d'époques.
+    Callback personnalisé pour déverrouiller le backbone du modèle après 
+    un certain nombre d'époques, et gestion du LR.
     """
-    def __init__(self, unfreeze_epoch=10):
+    def __init__(self, unfreeze_epoch=10, reduced_lr=1e-5):
         self.unfreeze_epoch = unfreeze_epoch
+        self.reduced_lr = reduced_lr
+        self.has_dropped = False
 
     def on_epoch_begin(self, args, state, control, **kwargs):
-        if round(state.epoch) == self.unfreeze_epoch:
+        if round(state.epoch) == self.unfreeze_epoch and not self.has_dropped:
+            optimizer = kwargs['optimizer']
             model = kwargs['model']
+            if optimizer is not None:
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = self.reduced_lr
+                print(f"Learning rate reduced to {self.reduced_lr} at epoch {state.epoch}.")
+                self.has_dropped = True
+
             for param in model.segformer.parameters():
                 param.requires_grad = True
             
@@ -123,7 +133,7 @@ trainer = Trainer(
     compute_loss_func=compute_loss,         
     compute_metrics=compute_metrics, 
     callbacks=[EarlyStoppingCallback(early_stopping_patience=20),
-               UnfreezeBackboneCallback(unfreeze_epoch=10)]
+               UnfreezeBackboneCallback(unfreeze_epoch=10, reduced_lr=1e-5)]
                 
 )
 
