@@ -7,7 +7,7 @@ from transformers import (
     EarlyStoppingCallback,
     TrainerCallback,
     Trainer,
-    get_linear_schedule_with_warmup
+    get_constant_schedule
 )
 import matplotlib.pyplot as plt
 from src.dataset import CamVidDataset  
@@ -47,16 +47,9 @@ class UnfreezeBackboneCallback(TrainerCallback):
                 {"params": backbone_params, "lr": self.reduced_lr_backbone},
                 {"params": head_params, "lr": self.reduced_lr_head}
             ], weight_decay=0.01)
-            
-            # Calcul précis du nombre de pas restants jusqu'à la fin réelle des 200 époques
-            steps_restants = self.trainer.state.max_steps - self.trainer.state.global_step
-            
-            new_scheduler = get_linear_schedule_with_warmup(
-                new_optimizer, 
-                num_warmup_steps=0, 
-                num_training_steps=steps_restants
-            )
-            
+
+            new_scheduler = get_constant_schedule(new_optimizer)
+
             # Enregistrement Multi-GPU et FP16
             _, new_optimizer, new_scheduler = self.trainer.accelerator.prepare(
                 model, new_optimizer, new_scheduler
@@ -148,7 +141,7 @@ unfreeze_callback = UnfreezeBackboneCallback(
 training_args = TrainingArguments(
     output_dir="./results", 
     learning_rate=2e-4, 
-    num_train_epochs=200,                
+    num_train_epochs=300,                
     per_device_train_batch_size=16, 
     per_device_eval_batch_size=16, 
     max_grad_norm=5.0,
