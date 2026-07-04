@@ -164,7 +164,11 @@ training_args = TrainingArguments(
     load_best_model_at_end=True,         
     metric_for_best_model="eval_mean_iou", 
     greater_is_better=True,             
-    save_total_limit=2,                  
+    save_total_limit=2,  
+
+    # Gestion de la mémoire et du multi-threading
+    dataloader_num_workers=2,     
+    dataloader_pin_memory=True,                 
 )
 
 trainer = Trainer(
