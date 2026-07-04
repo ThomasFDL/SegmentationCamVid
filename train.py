@@ -32,11 +32,9 @@ class UnfreezeBackboneCallback(TrainerCallback):
         if round(state.epoch) == self.unfreeze_epoch and not self.has_dropped:
             model = kwargs.get('model')
             
-            # 1. Dégel de tous les paramètres
             for param in model.parameters():
                 param.requires_grad = True
          
-            # 2. Séparation des paramètres (Backbone / Tête)
             backbone_params = []
             head_params = []
             for name, param in model.named_parameters():
@@ -45,32 +43,32 @@ class UnfreezeBackboneCallback(TrainerCallback):
                 else:
                     backbone_params.append(param)
                     
-            # 3. Création du nouvel optimiseur AdamW différentiel
             new_optimizer = AdamW([
                 {"params": backbone_params, "lr": self.reduced_lr_backbone},
                 {"params": head_params, "lr": self.reduced_lr_head}
             ], weight_decay=0.01)
             
-            # 4. Injection de l'optimiseur dans le Trainer lié
-            self.trainer.optimizer = new_optimizer
-            
-            # 5. Reconstruction et recalibrage du Scheduler
-            self.trainer.lr_scheduler = get_linear_schedule_with_warmup(
+            new_scheduler = get_linear_schedule_with_warmup(
                 new_optimizer, 
                 num_warmup_steps=0, 
                 num_training_steps=self.trainer.state.max_steps
             )
             
-            # Réalignement du pas du scheduler
+            # Enregistrement Multi-GPU et FP16 pour éviter le crash du GradScaler
+            _, new_optimizer, new_scheduler = self.trainer.accelerator.prepare(
+                model, new_optimizer, new_scheduler
+            )
+            
+            self.trainer.optimizer = new_optimizer
+            self.trainer.lr_scheduler = new_scheduler
+            
             for _ in range(self.trainer.state.global_step):
                 self.trainer.lr_scheduler.step()
             
-            # 6. Mise à jour du taux d'apprentissage global
             args.learning_rate = self.reduced_lr_head
             
             print(f"Backbone unfrozen. LR set to {self.reduced_lr_backbone} (backbone) and {self.reduced_lr_head} (head) at epoch {state.epoch}.")
             self.has_dropped = True
-         
        
 
 
@@ -142,7 +140,7 @@ model = get_model(checkpoint=CHECKPOINT, num_classes=NUM_CLASSES)
 
 #Création du callback pour déverrouiller le backbone après 25 époques
 unfreeze_callback = UnfreezeBackboneCallback(
-    unfreeze_epoch=2, 
+    unfreeze_epoch=1, 
     reduced_lr_backbone=1e-5, 
     reduced_lr_head=5e-5
 )
