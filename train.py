@@ -1,12 +1,12 @@
 import os
 import torch.nn.functional as F
+from torch.optim import AdamW
 from transformers import (
     SegformerImageProcessor, 
     TrainingArguments, 
     EarlyStoppingCallback,
     TrainerCallback,
-    Trainer,
-    AdamW
+    Trainer
 )
 import matplotlib.pyplot as plt
 from src.dataset import CamVidDataset  
@@ -51,7 +51,7 @@ class UnfreezeBackboneCallback(TrainerCallback):
             
             print(f"Backbone unfrozen. LR set to {self.reduced_lr_backbone} (backbone) and {self.reduced_lr_head} (head) at epoch {state.epoch}.")
             self.has_dropped = True
-            
+
 
 def compute_loss(outputs, labels, num_items_in_batch=None):
     """
@@ -148,7 +148,7 @@ trainer = Trainer(
     compute_loss_func=compute_loss,         
     compute_metrics=compute_metrics, 
     callbacks=[EarlyStoppingCallback(early_stopping_patience=20),
-               UnfreezeBackboneCallback(unfreeze_epoch=25, reduced_lr=5e-5)]
+               UnfreezeBackboneCallback(unfreeze_epoch=25, reduced_lr_backbone=1e-5, reduced_lr_head=5e-5)]
                 
 )
 
