@@ -24,7 +24,7 @@ class UnfreezeBackboneCallback(TrainerCallback):
     def on_epoch_begin(self, args, state, control, **kwargs):
         if round(state.epoch) == self.unfreeze_epoch:
             model = kwargs['model']
-            for param in model.segformer.encoder.parameters():
+            for param in model.segformer.parameters():
                 param.requires_grad = True
             
 
@@ -100,7 +100,7 @@ training_args = TrainingArguments(
     learning_rate=5e-5, 
     num_train_epochs=200,                
     per_device_train_batch_size=16, 
-    per_device_eval_batch_size=16, 
+    per_device_eval_batch_size=8, 
     eval_strategy="epoch",         
     save_strategy="epoch", 
     logging_steps=10, 
