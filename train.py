@@ -19,7 +19,7 @@ class UnfreezeBackboneCallback(TrainerCallback):
     Callback personnalisé pour déverrouiller le backbone du modèle après 
     un certain nombre d'époques, et gestion du LR.
     """
-    def __init__(self, unfreeze_epoch=10, reduced_lr=1e-5):
+    def __init__(self, unfreeze_epoch=10, reduced_lr=5e-5):
         self.unfreeze_epoch = unfreeze_epoch
         self.reduced_lr = reduced_lr
         self.has_dropped = False
@@ -135,7 +135,7 @@ trainer = Trainer(
     compute_loss_func=compute_loss,         
     compute_metrics=compute_metrics, 
     callbacks=[EarlyStoppingCallback(early_stopping_patience=20),
-               UnfreezeBackboneCallback(unfreeze_epoch=25, reduced_lr=1e-5)]
+               UnfreezeBackboneCallback(unfreeze_epoch=25, reduced_lr=5e-5)]
                 
 )
 
