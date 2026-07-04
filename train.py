@@ -77,7 +77,6 @@ NUM_CLASSES = 32
 # 2. INSTANCIATION DES DATASETS (TRAIN & VAL)
 # ==========================================
 processor = SegformerImageProcessor.from_pretrained(CHECKPOINT)
-processor.size = {"height": 720, "width": 960}
 
 train_dataset = CamVidDataset(
     images_dir=PATH_TRAIN_IMG, masks_dir=PATH_TRAIN_MSK, csv_path=PATH_TO_CSV, processor=processor, is_train=True  
@@ -100,7 +99,7 @@ training_args = TrainingArguments(
     learning_rate=5e-5, 
     num_train_epochs=200,                
     per_device_train_batch_size=16, 
-    per_device_eval_batch_size=8, 
+    per_device_eval_batch_size=16, 
     eval_strategy="epoch",         
     save_strategy="epoch", 
     logging_steps=10, 
