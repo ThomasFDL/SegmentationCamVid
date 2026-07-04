@@ -106,7 +106,7 @@ model = get_model(checkpoint=CHECKPOINT, num_classes=NUM_CLASSES)
 # ==========================================
 training_args = TrainingArguments(
     output_dir="./results", 
-    learning_rate=5e-5, 
+    learning_rate=2e-4, 
     num_train_epochs=200,                
     per_device_train_batch_size=16, 
     per_device_eval_batch_size=16, 
