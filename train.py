@@ -33,6 +33,7 @@ class UnfreezeBackboneCallback(TrainerCallback):
                     param_group['lr'] = self.reduced_lr
                 print(f"Learning rate reduced to {self.reduced_lr} at epoch {state.epoch}.")
                 self.has_dropped = True
+                args.learning_rate = self.reduced_lr
 
             for param in model.segformer.parameters():
                 param.requires_grad = True
@@ -110,6 +111,7 @@ training_args = TrainingArguments(
     num_train_epochs=200,                
     per_device_train_batch_size=16, 
     per_device_eval_batch_size=16, 
+    max_grad_norm=5.0,
     eval_strategy="epoch",         
     save_strategy="epoch", 
     logging_steps=10, 
@@ -133,7 +135,7 @@ trainer = Trainer(
     compute_loss_func=compute_loss,         
     compute_metrics=compute_metrics, 
     callbacks=[EarlyStoppingCallback(early_stopping_patience=20),
-               UnfreezeBackboneCallback(unfreeze_epoch=10, reduced_lr=1e-5)]
+               UnfreezeBackboneCallback(unfreeze_epoch=25, reduced_lr=1e-5)]
                 
 )
 
