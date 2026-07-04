@@ -6,7 +6,8 @@ from transformers import (
     TrainingArguments, 
     EarlyStoppingCallback,
     TrainerCallback,
-    Trainer
+    Trainer,
+    get_linear_schedule_with_warmup
 )
 import matplotlib.pyplot as plt
 from src.dataset import CamVidDataset  
@@ -20,19 +21,22 @@ class UnfreezeBackboneCallback(TrainerCallback):
     Callback personnalisé pour déverrouiller le backbone du modèle après 
     un certain nombre d'époques, et gestion du LR.
     """
-    def __init__(self, unfreeze_epoch=10, reduced_lr_backbone=1e-5, reduced_lr_head=5e-5):
+    def __init__(self, unfreeze_epoch=25, reduced_lr_backbone=1e-5, reduced_lr_head=5e-5):
         self.unfreeze_epoch = unfreeze_epoch
         self.reduced_lr_backbone = reduced_lr_backbone
         self.reduced_lr_head = reduced_lr_head
         self.has_dropped = False
+        self.trainer = None  
 
     def on_epoch_begin(self, args, state, control, **kwargs):
         if round(state.epoch) == self.unfreeze_epoch and not self.has_dropped:
+            model = kwargs.get('model')
             
-            model = kwargs['model']
+            # 1. Dégel de tous les paramètres
             for param in model.parameters():
                 param.requires_grad = True
          
+            # 2. Séparation des paramètres (Backbone / Tête)
             backbone_params = []
             head_params = []
             for name, param in model.named_parameters():
@@ -41,16 +45,33 @@ class UnfreezeBackboneCallback(TrainerCallback):
                 else:
                     backbone_params.append(param)
                     
+            # 3. Création du nouvel optimiseur AdamW différentiel
             new_optimizer = AdamW([
                 {"params": backbone_params, "lr": self.reduced_lr_backbone},
                 {"params": head_params, "lr": self.reduced_lr_head}
             ], weight_decay=0.01)
             
-            kwargs['trainer'].optimizer = new_optimizer
+            # 4. Injection de l'optimiseur dans le Trainer lié
+            self.trainer.optimizer = new_optimizer
+            
+            # 5. Reconstruction et recalibrage du Scheduler
+            self.trainer.lr_scheduler = get_linear_schedule_with_warmup(
+                new_optimizer, 
+                num_warmup_steps=0, 
+                num_training_steps=self.trainer.state.max_steps
+            )
+            
+            # Réalignement du pas du scheduler
+            for _ in range(self.trainer.state.global_step):
+                self.trainer.lr_scheduler.step()
+            
+            # 6. Mise à jour du taux d'apprentissage global
             args.learning_rate = self.reduced_lr_head
             
             print(f"Backbone unfrozen. LR set to {self.reduced_lr_backbone} (backbone) and {self.reduced_lr_head} (head) at epoch {state.epoch}.")
             self.has_dropped = True
+         
+       
 
 
 def compute_loss(outputs, labels, num_items_in_batch=None):
@@ -118,6 +139,14 @@ model = get_model(checkpoint=CHECKPOINT, num_classes=NUM_CLASSES)
 # ==========================================
 # 4. CONFIGURATION DU GESTIONNAIRE D'ENTRAÎNEMENT
 # ==========================================
+
+#Création du callback pour déverrouiller le backbone après 25 époques
+unfreeze_callback = UnfreezeBackboneCallback(
+    unfreeze_epoch=2, 
+    reduced_lr_backbone=1e-5, 
+    reduced_lr_head=5e-5
+)
+
 training_args = TrainingArguments(
     output_dir="./results", 
     learning_rate=2e-4, 
@@ -148,9 +177,11 @@ trainer = Trainer(
     compute_loss_func=compute_loss,         
     compute_metrics=compute_metrics, 
     callbacks=[EarlyStoppingCallback(early_stopping_patience=20),
-               UnfreezeBackboneCallback(unfreeze_epoch=25, reduced_lr_backbone=1e-5, reduced_lr_head=5e-5)]
-                
+               unfreeze_callback]    
 )
+
+# Associe le trainer au callback pour permettre la modification de l'optimiseur
+unfreeze_callback.trainer = trainer
 
 # ==========================================
 # 5. ENTRAÎNEMENT ET ENREGISTREMENT DES COURBES
