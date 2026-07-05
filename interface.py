@@ -11,9 +11,12 @@ from transformers import SegformerImageProcessor, SegformerForSemanticSegmentati
 import coremltools as ct  
 import time
 
-# ==========================================
-# CONFIGURATION ET CHARGEMENT DU CODE APPLICATIF
-# ==========================================
+
+# =================================
+#    INTERFACE CODÉE PAR UNE IA
+# =================================
+
+
 CSV_FILE_PATH = "./CamVid/class_dict.csv"
 MODEL_PATH = "./model" 
 COREML_PATH = "./model_CoreML.mlpackage"
@@ -140,6 +143,7 @@ class SegmentationApp:
                     item_frame.pack(fill="x", anchor="w", pady=1)
                     tk.Label(item_frame, width=2, height=1, bg=hex_color, relief="solid").pack(side="left", padx=3)
                     tk.Label(item_frame, text=row[name_key], font=("Helvetica", 8), bg="#f0f0f0", fg="black").pack(side="left")
+
     def predire_frame(self, image_pil):
         """Prend une image PIL, gère l'inférence selon le modèle sélectionné et renvoie le masque coloré PIL."""
         width, height = image_pil.size
@@ -246,10 +250,6 @@ class SegmentationApp:
         self.btn_next.configure(state=state)
 
 
-       # ==========================================
-    # MODE VIDÉO LIVE CADENCÉ SUR L'INFÉRENCE
-    # ==========================================
-    import time  # Assurez-vous d'avoir "import time" tout en haut de votre script
 
     # ==========================================
     # MODE VIDÉO LIVE : TEMPS RÉEL AVEC SAUT DYNAMIQUE
