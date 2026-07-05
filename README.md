@@ -1,9 +1,9 @@
 # SegmentationCamVid
 
 
-**SegmentationCamVid** est un petit projet personnel que j'ai développé pour découvrir le domaine de la segmentation sémantique. L'objectif est de classifier chaque pixel d'une scène routière en temps réel parmi 32 classes (route, trottoir, piéton, voiture, etc.) en utilisant le jeu de données **CamVid**.
+**SegmentationCamVid** est un petit projet personnel que j'ai développé pour découvrir le domaine de la segmentation sémantique. L'objectif est de classifier chaque pixel d'une scène routière en temps réel parmi 32 classes (route, trottoir, piéton, voiture, etc.) en utilisant le jeu de données **CamVid**. 
 
-Le projet s'appuie sur l'architecture de Transformer **SegFormer (mit-b1)**. Pour gérer la disparité entre les classes, j'ai implémenté une fonction de perte combinée (**Dice Loss + Focal Loss**). J'obtiens un mIoU de 43,85% sur le dataset de test, notamment à cause de certaines classes qui sont trop peu présentes dans le dataset pour pouvoir les segmenter correctement. 
+Le projet s'appuie sur l'architecture de Transformer **SegFormer (mit-b1)**, préentrainé sur Cityscapes. Pour maximiser ses performances, j'ai mis en place une stratégie de fine tuning. Pour gérer la disparité entre les classes, j'ai implémenté une fonction de perte combinée (**Dice Loss + Focal Loss**). J'obtiens un mIoU de 55,25% sur le dataset de test, notamment à cause de certaines classes qui sont trop peu présentes dans le dataset pour pouvoir les segmenter correctement. 
 
 ---
 
@@ -11,7 +11,7 @@ Le projet s'appuie sur l'architecture de Transformer **SegFormer (mit-b1)**. Pou
 * **Modèle :** Architecture SegFormer-B1 (mit-1) adaptée pour 32 classes.
 * **Loss Hybride :** Dice loss + Focal loss pour forcer la précision sur les classes peu représentées.
 * **Interface Vidéo :** Un script dédié pour tester visuellement le modèle sur des fichiers vidéo ou photo.
-* **Portage pour accélerer l'inférence :** Modèle optimisé et converti au format CoreML pour les appareils Apple.
+* **Portage pour accélerer l'inférence :** Modèle optimisé et converti au format CoreML pour les appareils Apple. Grâce à cela, l'inférence en temps réel est possible.
 
 ---
 
@@ -19,8 +19,8 @@ Le projet s'appuie sur l'architecture de Transformer **SegFormer (mit-b1)**. Pou
 
 Pas besoin de relancer l'entraînement complet pour tester le projet ! Je mets à disposition mes deux meilleurs modèles entraînés. Prenez le modèle CoreML si vous avez un Macbook avec une puce M1,M2,M3,m4 ou M5, et l'autre sinon.
 
-* [Télécharger le modèle PyTorch](https://drive.google.com/file/d/1RcA1CBHiVqKSDdVP2KQZ0KgyndXYsyyU/view?usp=sharing)
-* [Télécharger le modèle optimisé CoreML (.mlpackage)](https://drive.google.com/file/d/16L7ud9_b-NajKaw4J3ngNHA_Mu2xiLy5/view?usp=drive_link)
+* [Télécharger le modèle PyTorch](https://drive.google.com/file/d/1IsnJ4Rwd0lv33elxYtmpl85Td6DehBnN/view?usp=sharing)
+* [Télécharger le modèle optimisé CoreML (.mlpackage)](https://drive.google.com/file/d/1RksRMXhbTwEJJrAHtg1PWeJMOne2s9LS/view?usp=sharing)
   
 *Une fois téléchargé et décompressé, placez le modèle à la racine du projet.
 ---
@@ -75,8 +75,9 @@ python interface.py
 
 ---
 
-## Mes Résultats
+## Exemple d'utilisation
 
-<img width="640" height="358" alt="démo" src="https://github.com/user-attachments/assets/fa9c1d56-5ab1-406f-b031-b9515e52742d" />
+<img width="600" height="336" alt="exemple" src="https://github.com/user-attachments/assets/5bb04a38-bec9-4295-9714-f77a858443a9" />
+
 
 
