@@ -9,9 +9,10 @@ import cv2
 from PIL import Image, ImageTk
 from transformers import SegformerImageProcessor, SegformerForSemanticSegmentation
 import coremltools as ct  
+import time
 
 # ==========================================
-# INTERFACE ENTIÈREMENT CRÉEE PAR UNE IA
+# CONFIGURATION ET CHARGEMENT DU CODE APPLICATIF
 # ==========================================
 CSV_FILE_PATH = "./CamVid/class_dict.csv"
 MODEL_PATH = "./model" 
@@ -19,13 +20,11 @@ COREML_PATH = "./model_CoreML.mlpackage"
 NUM_CLASSES = 32  
 
 class SelectionDialog(simpledialog.Dialog):
-    """Boîte de dialogue personnalisée pour choisir le modèle au démarrage."""
+    """Boîte de dialogue simplifiée pour choisir l'architecture d'inférence."""
     def body(self, master):
         self.title("Sélection du Modèle")
         tk.Label(master, text="Choisissez l'architecture à utiliser :", font=("Helvetica", 11, "bold")).pack(pady=10)
-        
         self.choice = tk.StringVar(value="normal")
-        
         tk.Radiobutton(master, text="Modèle Normal (PyTorch MPS)", variable=self.choice, value="normal", font=("Helvetica", 10)).pack(anchor="w", padx=20, pady=5)
         tk.Radiobutton(master, text="Modèle Réduit (CoreML Neural Engine)", variable=self.choice, value="coreml", font=("Helvetica", 10)).pack(anchor="w", padx=20, pady=5)
         return master
@@ -40,23 +39,19 @@ class SegmentationApp:
         self.root.geometry("1200x700")
         self.root.configure(bg="#f0f0f0")
 
-        # --- SÉLECTION DU MODÈLE AU DÉMARRAGE ---
         dialog = SelectionDialog(self.root)
         self.model_type = dialog.result if dialog.result else "normal"
         
         print(f"Option sélectionnée : {self.model_type.upper()}")
         self.processor = SegformerImageProcessor.from_pretrained("nvidia/mit-b3")
-        
-        # Détection du matériel principal
         self.device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
         if self.model_type == "coreml":
-            print("⚡ Chargement du modèle réduit CoreML sur le Neural Engine...")
+            print("⚡ Chargement du modèle réduit CoreML...")
             if not os.path.exists(COREML_PATH):
-                messagebox.showerror("Erreur", f"Le modèle CoreML est introuvable à l'adresse :\n{COREML_PATH}\n\nBascule automatique sur le modèle Normal.")
+                messagebox.showerror("Erreur", f"Modèle introuvable à : {COREML_PATH}\nBascule sur PyTorch.")
                 self.model_type = "normal"
             else:
-                # Chargement du modèle Apple avec allocation matérielle optimisée
                 self.model = ct.models.MLModel(COREML_PATH, compute_units=ct.ComputeUnit.CPU_AND_GPU)
                 print("✅ Modèle CoreML chargé avec succès.")
 
@@ -65,23 +60,20 @@ class SegmentationApp:
             self.model = SegformerForSemanticSegmentation.from_pretrained(MODEL_PATH)
             self.model.eval()
             self.model.to(self.device)
-            print(f"✅ Modèle PyTorch chargé sur le périphérique : {self.device}")
+            print(f"✅ Modèle PyTorch chargé sur : {self.device}")
 
-        # --- CHARGEMENT DE LA PALETTE DE COULEURS ---
         self.class_colors = self.load_class_colors(CSV_FILE_PATH)
 
-        # --- VARIABLES DE CONTRÔLE ---
         self.filepaths = []
         self.current_index = 0
         self.video_cap = None
         self.is_playing_video = False
 
-        # --- INTERFACE GRAPHIQUE (UI) ---
-        label_text = f"Segmentation CamVid en Temps Réel - Mode [{self.model_type.upper()}]"
+        # --- CONSTRUTION DE L'INTERFACE GRAPHIQUE (UI) ---
+        label_text = f"Segmentation CamVid - Mode [{self.model_type.upper()}]"
         title = tk.Label(root, text=label_text, font=("Helvetica", 16, "bold"), bg="#f0f0f0", fg="#333")
         title.pack(pady=10)
 
-        # Boutons de sélection
         self.frame_buttons = tk.Frame(root, bg="#f0f0f0")
         self.frame_buttons.pack(pady=5)
         
@@ -91,7 +83,6 @@ class SegmentationApp:
         self.btn_select_vid = tk.Button(self.frame_buttons, text="Mode Vidéo Live", command=self.ouvrir_video, font=("Helvetica", 11), bg="#28a745", fg="black", padx=10, pady=5)
         self.btn_select_vid.pack(side="left", padx=10)
 
-        # Navigation multi-photos
         self.frame_nav = tk.Frame(root, bg="#f0f0f0")
         self.frame_nav.pack(pady=5)
         self.btn_prev = tk.Button(self.frame_nav, text="◀ Précédent", command=self.image_precedente, state="disabled")
@@ -101,11 +92,9 @@ class SegmentationApp:
         self.btn_next = tk.Button(self.frame_nav, text="Suivant ▶", command=self.image_suivante, state="disabled")
         self.btn_next.pack(side="left", padx=10)
 
-        # Conteneur principal
         self.main_container = tk.Frame(root, bg="#f0f0f0")
         self.main_container.pack(expand=True, fill="both", padx=20, pady=10)
 
-        # Écrans de visualisation
         self.frame_images = tk.Frame(self.main_container, bg="#f0f0f0")
         self.frame_images.pack(side="left", expand=True, fill="both")
 
@@ -115,10 +104,8 @@ class SegmentationApp:
         self.panel_seg = tk.Label(self.frame_images, text="Segmentation", bg="#e0e0e0", borderwidth=1, relief="solid")
         self.panel_seg.pack(side="right", expand=True, padx=10, fill="both")
 
-        # Légende
         self.charger_legende_classes()
 
-        # Statut
         self.status_label = tk.Label(root, text=f"Prêt - Moteur d'inférence : {self.model_type.upper()}", bd=1, relief="sunken", anchor="w", bg="#e0e0e0", fg="#555")
         self.status_label.pack(side="bottom", fill="x")
 
@@ -153,10 +140,6 @@ class SegmentationApp:
                     item_frame.pack(fill="x", anchor="w", pady=1)
                     tk.Label(item_frame, width=2, height=1, bg=hex_color, relief="solid").pack(side="left", padx=3)
                     tk.Label(item_frame, text=row[name_key], font=("Helvetica", 8), bg="#f0f0f0", fg="black").pack(side="left")
-
-    # ==========================================
-    # LOGIQUE DE PRÉDICTION CORE (ADAPTÉE PARTICULIÈREMENT POUR COREML)
-    # ==========================================
     def predire_frame(self, image_pil):
         """Prend une image PIL, gère l'inférence selon le modèle sélectionné et renvoie le masque coloré PIL."""
         width, height = image_pil.size
@@ -169,20 +152,16 @@ class SegmentationApp:
             np_images = inputs["pixel_values"]
             
             predictions = self.model.predict({"pixel_values": np_images})
-            
-            # 🌟 CORRECTION ICI : On prend le premier élément [0] de la liste de clés
             output_key = list(predictions.keys())[0] 
+            logits_np = predictions[output_key].squeeze(0)
             
-            # Maintenant output_key est un texte propre (ex: "linear_104") et non une liste
-            logits_np = predictions[output_key].squeeze(0) # Forme : (32, 128, 128)
-            
-            # --- ÉTAPE DE LISSAGE ANTI-PIXELISATION ---
             logits_resized = np.zeros((NUM_CLASSES, height, width), dtype=np.float32)
             for c in range(NUM_CLASSES):
                 logits_resized[c] = cv2.resize(logits_np[c], (width, height), interpolation=cv2.INTER_LINEAR)
             
             prediction_indices = np.argmax(logits_resized, axis=0)
-            # ------------------------------------------
+            
+        # ------------------------------------------
         # PIPELINE BRANCHÉ SUR PYTORCH MPS (NORMAL)
         # ------------------------------------------
         else:
@@ -197,13 +176,11 @@ class SegmentationApp:
                     outputs = self.model(**inputs)
                 logits = outputs.logits
 
-            # Redimensionnement lourd via interpolation PyTorch
             upsampled_logits = torch.nn.functional.interpolate(
                 logits, size=(height, width), mode="bilinear", align_corners=False
             )
             prediction_indices = upsampled_logits.argmax(dim=1).squeeze(0).cpu().numpy()
 
-        # Coloration finale commune du masque
         prediction_indices = np.clip(prediction_indices, 0, NUM_CLASSES - 1)
         color_mask = self.class_colors[prediction_indices]
         return Image.fromarray(color_mask)
@@ -224,6 +201,8 @@ class SegmentationApp:
         if self.video_cap:
             self.video_cap.release()
             self.video_cap = None
+        self.panel_origin.configure(image="", text="Original")
+        self.panel_seg.configure(image="", text="Segmentation")
 
     def image_precedente(self):
         if self.current_index > 0:
@@ -246,7 +225,6 @@ class SegmentationApp:
         img_pil = Image.open(path).convert("RGB")
         img_resized = img_pil.resize((550, 350))
         
-        # Appel de la fonction de prédiction commune
         mask_color_pil = self.predire_frame(img_pil)
         mask_resized = mask_color_pil.resize((550, 350))
         
@@ -259,133 +237,104 @@ class SegmentationApp:
         self.panel_seg.image = tk_img_seg
         self.status_label.configure(text=f"Fichier affiché : {os.path.basename(path)}")
 
-   # ==========================================
-    # MODE VIDÉO LIVE 
+    # ==========================================
+    # MODE VIDÉO LIVE CADENCÉ SUR L'INFÉRENCE
+    # ==========================================
+
+    def statut_boutons_navigation(self, state):
+        self.btn_prev.configure(state=state)
+        self.btn_next.configure(state=state)
+
+
+       # ==========================================
+    # MODE VIDÉO LIVE CADENCÉ SUR L'INFÉRENCE
+    # ==========================================
+    import time  # Assurez-vous d'avoir "import time" tout en haut de votre script
+
+    # ==========================================
+    # MODE VIDÉO LIVE : TEMPS RÉEL AVEC SAUT DYNAMIQUE
     # ==========================================
     def ouvrir_video(self):
         self.arreter_video()
         file = filedialog.askopenfilename(filetypes=[("Vidéos", "*.mp4 *.avi *.mov *.mkv")])
         if not file: return
         
-        # 1. Fenêtre de progression
-        progress_win = tk.Toplevel(self.root)
-        progress_win.title("Traitement de la vidéo...")
-        progress_win.geometry("400x150")
-        progress_win.transient(self.root)
-        progress_win.grab_set()
+        self.video_cap = cv2.VideoCapture(file)
+        self.fps = self.video_cap.get(cv2.CAP_PROP_FPS)
+        if self.fps <= 0: self.fps = 30.0  # Sécurité par défaut
         
-        lbl_prog = tk.Label(progress_win, text="Initialisation du traitement...", font=("Helvetica", 10))
-        lbl_prog.pack(pady=15)
-        
-        progress = ttk.Progressbar(progress_win, orient="horizontal", length=300, mode="determinate")
-        progress.pack(pady=10)
-        self.root.update()
-
-        # 2. Ouverture de la vidéo source
-        cap = cv2.VideoCapture(file)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        
-        # Chemins des deux fichiers de sortie temporaires
-        self.output_video_origin = "./temp_video_origin.mp4"
-        self.output_video_seg = "./temp_video_seg.mp4"
-        
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out_origin = cv2.VideoWriter(self.output_video_origin, fourcc, fps, (width, height))
-        out_seg = cv2.VideoWriter(self.output_video_seg, fourcc, fps, (width, height))
-        
-        print("Démarrage du traitement de la vidéo...")
-        frame_count = 0
-        
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret: break
-            
-            # Écriture immédiate de la frame originale pure pour le panneau gauche
-            out_origin.write(frame)
-            
-            # Prédiction du masque pour le panneau droit
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img_pil = Image.fromarray(frame_rgb)
-            mask_color_pil = self.predire_frame(img_pil)
-            
-            # Conversion du masque coloré pur en BGR pour OpenCV
-            frame_seg_out = cv2.cvtColor(np.array(mask_color_pil), cv2.COLOR_RGB2BGR)
-            out_seg.write(frame_seg_out)
-            
-            # Progression
-            frame_count += 1
-            pct = int((frame_count / total_frames) * 100)
-            progress['value'] = pct
-            lbl_prog.config(text=f"Traitement de la frame {frame_count} / {total_frames} ({pct}%)")
-            if frame_count % 10 == 0:
-                progress_win.update()
-
-        cap.release()
-        out_origin.release()
-        out_seg.release()
-        progress_win.destroy()
-
-        # 3. Chargement des deux flux synchronisés pour la lecture fluide
-        self.cap_origin = cv2.VideoCapture(self.output_video_origin)
-        self.cap_seg = cv2.VideoCapture(self.output_video_seg)
         self.is_playing_video = True
         self.statut_boutons_navigation("disabled")
+        self.lbl_index.configure(text="Lecture Vidéo en Temps Réel (Saut dynamique)...")
         
-        self.video_delay = int(1000 / fps) if fps > 0 else 33
+        # Enregistrement du moment précis où la vidéo commence à jouer
+        self.start_time = time.time()
+        self.frame_count = 0
+        
         self.update_video_stream()
 
-    def statut_boutons_navigation(self, state):
-        self.btn_prev.configure(state=state)
-        self.btn_next.configure(state=state)
-
     def update_video_stream(self):
-        if not self.is_playing_video or not self.cap_origin or not self.cap_seg: return
+        if not self.is_playing_video or self.video_cap is None: return
         
-        ret_origin, frame_origin = self.cap_origin.read()
-        ret_seg, frame_seg = self.cap_seg.read()
+        # 1. Calcul du temps écoulé réel depuis le début du clic "Play"
+        elapsed_time = time.time() - self.start_time
         
-        # Si une des deux vidéos se termine, on arrête proprement
-        if not ret_origin or not ret_seg:
+        # 2. Déduction de la frame théorique qui DEVRAIT être affichée à cet instant précis
+        target_frame = int(elapsed_time * self.fps)
+        
+        # 3. LE COEUR DU SKIPPING : Si l'inférence a été trop longue, on saute les frames en retard
+        # cap.grab() est bcp plus rapide que cap.read() car il ne décompresse pas l'image en RAM
+        while self.frame_count < target_frame:
+            ret_grab = self.video_cap.grab()
+            if not ret_grab: break  # Fin de vidéo pendant le saut
+            self.frame_count += 1
+            
+        # 4. On lit enfin la bonne frame sur laquelle on a rattrapé le retard
+        ret, frame = self.video_cap.read()
+        if not ret:
             self.arreter_video()
             self.status_label.configure(text="Fin de la vidéo.")
-            
-            # Nettoyage des deux fichiers temporaires sur le disque
-            for path in [self.output_video_origin, self.output_video_seg]:
-                if os.path.exists(path):
-                    try: os.remove(path)
-                    except: pass
             return
             
-        # --- PANNEAU GAUCHE : Original Pur ---
-        rgb_origin = cv2.cvtColor(frame_origin, cv2.COLOR_BGR2RGB)
-        pil_origin = Image.fromarray(rgb_origin).resize((550, 350))
-        tk_img_origin = ImageTk.PhotoImage(pil_origin)
+        self.frame_count += 1
         
+        # --- PANNEAU GAUCHE : Original Pur ---
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img_pil = Image.fromarray(frame_rgb)
+        img_resized = img_pil.resize((550, 350))
+        tk_img_origin = ImageTk.PhotoImage(img_resized)
+        
+        # --- PANNEAU DROIT : Inférence Réelle ---
+        mask_color_pil = self.predire_frame(img_pil)
+        mask_resized = mask_color_pil.resize((550, 350))
+        tk_img_seg = ImageTk.PhotoImage(mask_resized)
+        
+        # Mise à jour immédiate de l'affichage Tkinter
         self.panel_origin.configure(image=tk_img_origin, text="")
         self.panel_origin.image = tk_img_origin
-        
-        # --- PANNEAU DROIT : Segmentation Pure ---
-        rgb_seg = cv2.cvtColor(frame_seg, cv2.COLOR_BGR2RGB)
-        pil_seg = Image.fromarray(rgb_seg).resize((550, 350))
-        tk_img_seg = ImageTk.PhotoImage(pil_seg)
         
         self.panel_seg.configure(image=tk_img_seg, text="")
         self.panel_seg.image = tk_img_seg
         
-        # Boucle de rafraîchissement synchrone
-        self.root.after(self.video_delay, self.update_video_stream)
+        # Calcul du nombre de frames sautées à afficher dans la barre de statut pour info
+        frames_sautees = target_frame - self.frame_count + 1
+        self.status_label.configure(
+            text=f"Frame : {self.frame_count} | Retard rattrapé : {max(0, frames_sautees)} frames"
+        )
+        
+        # On relance la boucle immédiatement (1 ms) pour calculer le nouveau décalage temporel
+        self.root.after(1, self.update_video_stream)
+
 
     def arreter_video(self):
+        """Arrête la vidéo et libère proprement le flux de capture."""
         self.is_playing_video = False
-        if hasattr(self, 'cap_origin') and self.cap_origin:
-            self.cap_origin.release()
-            self.cap_origin = None
-        if hasattr(self, 'cap_seg') and self.cap_seg:
-            self.cap_seg.release()
-            self.cap_seg = None
+        if hasattr(self, 'video_cap') and self.video_cap:
+            if self.video_cap is not None:
+                self.video_cap.release()
+            self.video_cap = None
+        self.panel_origin.configure(image="", text="Original")
+        self.panel_seg.configure(image="", text="Segmentation")
 
 
 if __name__ == "__main__":
